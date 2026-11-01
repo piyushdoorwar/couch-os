@@ -87,7 +87,10 @@ setup while initial TV setup, provisioning, account setup or updates are in
 progress. Never disable Ambient/Photos, Assistant, tuner/HDMI, remote/Bluetooth,
 chipset services, settings, updates, Google services or Play Store.
 
-Record the exact stock and fallback packages in local config. Add discovered
+Record the exact stock and fallback packages in local config. If inspection proves
+there is no setup fallback on this firmware, leave `fallback.package` blank and
+set `fallback.verified.absent=true`; the script still refuses that claim if a
+known fallback appears in inventory. Add discovered
 critical OEM dependencies to `protected.packages`. This list must be nonempty.
 Choose only proven ads/tracking candidates in `verified.disable.packages`;
 start with the stock/fallback pair. Unknown packages stay. Nothing the owner
@@ -249,7 +252,7 @@ Keep personal installed apps/order, identifiers and raw logs private. Update
 `docs/validation.md` with pass/fail observations without account information.
 
 On the TV, turn off network/wireless/USB debugging and revoke authorisations.
-Disconnect ADB on the laptop, clear stale pairing values from local config, and
+Run `./scripts/disconnect.sh` on the laptop, clear stale pairing values from local config, and
 keep the private restore journal safe. Check that Home, Assistant and the Google
 Photos screensaver still work after debugging is off.
 

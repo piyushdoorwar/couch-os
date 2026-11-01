@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Fail closed for private paths; report paths/reasons without echoing secrets."""
 import argparse
+import hashlib
 import re
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APPROVED_BINARY = {
-    'gradle/wrapper/gradle-wrapper.jar',
-    'app/src/main/res/font/poppins_semibold.ttf',
-    'app/src/main/res/font/poppins_extrabold.ttf',
-    'app/src/main/res/font/poppins_black.ttf',
+    'gradle/wrapper/gradle-wrapper.jar': '2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046',
+    'app/src/main/res/font/poppins_semibold.ttf': 'd3bf1bdaf0550e83da9ac0b1d1d9fe6db086835a83aa28578e609a394b9a0286',
+    'app/src/main/res/font/poppins_extrabold.ttf': 'f2ab17c1a63a0ecc12c2461848fc8a469395e3cd2d641803e889c643d9f958e1',
+    'app/src/main/res/font/poppins_black.ttf': 'd82aaaf98a9283f9a8edd24e51173337d8eaf09e25cd3d98831f8ec8461748a1',
 }
+
 PRIVATE = re.compile(r'(^|/)(captures|build|\.gradle|\.idea)(/|$)|(^|/)local\.properties$|^config/local\.(?!example\.properties$)|\.(keystore|jks|pem|p12|apk|aab|log)$|(^|/)adb-.*\.log$|(^|/)\.env')
 IP = re.compile(r'(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])')
 MAC = re.compile(r'(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b')
@@ -25,9 +27,13 @@ def git(*args):
 
 def problems(path, data, private_values=()):
     reasons = []
+    if path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.mp4', '.mp3', '.pdf')):
+        reasons.append('media/artwork is not an approved public asset')
     if PRIVATE.search(path):
         reasons.append('private/generated path')
     if path in APPROVED_BINARY:
+        if hashlib.sha256(data).hexdigest() != APPROVED_BINARY[path]:
+            reasons.append('approved binary changed: verify upstream provenance and checksum first')
         return reasons
     try:
         content = data.decode('utf-8')

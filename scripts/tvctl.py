@@ -21,7 +21,7 @@ HOME = APP + '/.MainActivity'
 PACKAGE = re.compile(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+\Z')
 COMPONENT = re.compile(r'[A-Za-z][A-Za-z0-9_.]*/[A-Za-z._][A-Za-z0-9_.$]*\Z')
 # Deny entire critical families, including OEM variations unknown to the public policy.
-PROTECTED = re.compile(r'(?i)(^android$|^com\.android\.|^dev\.couch\.|ambient|backdrop|dream|photos|assistant|katniss|quicksearch|voice|speech|input|hdmi|cec|tuner|live.?tv|livechannels|bluetooth|remote|chipset|mediatek|amlogic|qualcomm|realtek|mtk|picture|audio|sound|settings|update|updater|ota(?:\.|$)|vending|gms(?:\.|$)|gsf(?:\.|$)|permission|systemui|provider|tvservice|tvservice|factory|security)')
+PROTECTED = re.compile(r'(?i)(^android$|^com\.android\.|^dev\.couch\.|ambient|backdrop|dream|photos|assistant|katniss|quicksearch|voice|speech|input|hdmi|cec|tuner|live.?tv|livechannels|bluetooth|remote|chipset|mediatek|amlogic|qualcomm|realtek|mtk|picture|audio|sound|settings|update|updater|ota(?:\.|$)|vending|gms(?:\.|$)|gsf(?:\.|$)|permission|systemui|provider|tvservice|factory|security)')
 
 
 class SafetyError(Exception):
@@ -160,7 +160,7 @@ class Device:
     def enabled_state(self, package):
         require(PACKAGE.fullmatch(package), 'Invalid package name.')
         dump = self.shell('dumpsys', 'package', package)
-        match = re.search(r'User 0:.*?\benabled=(\d)', dump)
+        match = re.search(r'User 0:.*?\benabled=(\d+)\b', dump)
         require(match is not None, 'Cannot read exact user-0 package state; refusing to guess.')
         state = int(match[1])
         require(state in (0, 1, 2, 3, 4), 'Unknown Android enabled-state value.')
@@ -194,6 +194,7 @@ def plan(device, config):
     packages = package_list(config.get('verified.disable.packages', ''))
     require(packages, 'No verified disable packages selected. Nothing will be disabled.')
     inventory, system, disabled = device.packages(), device.packages('-s'), device.packages('-d')
+    require(protected <= inventory, 'A protected package is missing from inventory; check local config and firmware before applying.')
     rules = policy()
     stock = config.get('stock.launcher.package', '')
     fallback = config.get('fallback.package', '')
@@ -204,9 +205,13 @@ def plan(device, config):
         require(package in inventory and package in system, 'Only verified preinstalled user-0 packages may be selected: ' + package)
         if rule.get('role') == 'stock-launcher':
             require(package == stock, 'Stock launcher candidate does not match the verified local stock launcher.')
-            require(bool(fallback) and rules.get(fallback, {}).get('role') == 'fallback', 'Verify the setup fallback package before disabling stock HOME.')
-            require(fallback in inventory and fallback in system, 'Configured setup fallback was not found as a system package.')
-            require(fallback in packages or fallback in disabled, 'Select the verified setup fallback too, so it cannot resurrect stock HOME.')
+            if not fallback:
+                require(config.get('fallback.verified.absent') == 'true', 'Verify the setup fallback package, or explicitly verify its absence before disabling stock HOME.')
+                require(not any(p in inventory for p, r in rules.items() if r['role'] == 'fallback'), 'A known setup fallback is installed; it cannot be marked absent.')
+            else:
+                require(rules.get(fallback, {}).get('role') == 'fallback', 'Configured fallback is not a reviewed setup fallback candidate.')
+                require(fallback in inventory and fallback in system, 'Configured setup fallback was not found as a system package.')
+                require(fallback in packages or fallback in disabled, 'Select the verified setup fallback too, so it cannot resurrect stock HOME.')
         if rule.get('role') == 'fallback':
             require(package == fallback, 'Setup fallback does not match verified config.')
     # Require this for ALL disables: losing a dependency must not strand HOME.

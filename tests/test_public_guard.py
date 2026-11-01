@@ -24,6 +24,12 @@ class PublicGuardTests(unittest.TestCase):
         self.assertTrue(guard.problems('artwork/logo.png', bytes([137, 80, 78, 71])))
         self.assertTrue(guard.problems('notes.md', b'copied private value', ['private value']))
 
+    def test_binary_allowlist_is_bound_to_exact_content(self):
+        path = 'gradle/wrapper/gradle-wrapper.jar'
+        self.assertFalse(guard.problems(path, (ROOT / path).read_bytes()))
+        self.assertTrue(guard.problems(path, b'accidental replacement'))
+        self.assertTrue(guard.problems('docs/account.svg', b'<svg/>'))
+
     def test_documentation_and_versions_allowed(self):
         self.assertFalse(guard.problems('docs/example.md', b'Compose 1.0.1 and API 30; weather.latitude= is left empty.'))
 

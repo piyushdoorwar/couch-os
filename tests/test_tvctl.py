@@ -159,6 +159,15 @@ class TvSafetyTests(unittest.TestCase):
             with self.assertRaises(tv.SafetyError):
                 tv.plan(self.dev, self.dev.config)
 
+    def test_explicit_verified_fallback_absence_is_allowed_only_when_absent(self):
+        self.dev.config['fallback.package'] = ''
+        self.dev.config['fallback.verified.absent'] = 'true'
+        self.dev.config['verified.disable.packages'] = STOCK
+        with self.assertRaises(tv.SafetyError):
+            tv.plan(self.dev, self.dev.config)
+        del self.dev.states[FALLBACK]
+        self.assertEqual([STOCK], tv.plan(self.dev, self.dev.config))
+
     def test_checks_report_reenabled_missing_and_changed_home(self):
         tv.apply(self.dev, self.dev.config, True)
         self.assertEqual(0, tv.check(self.dev))
@@ -208,6 +217,21 @@ class AdbProtocolTests(unittest.TestCase):
         with patch.object(self.dev, 'shell', return_value='User 10: enabled=1'):
             with self.assertRaises(tv.SafetyError):
                 self.dev.enabled_state(STOCK)
+
+    def test_identity_requires_exact_model_supported_api_and_stable_identifier(self):
+        with patch.object(self.dev, 'shell', side_effect=['WRONG_MODEL']):
+            with self.assertRaises(tv.SafetyError):
+                self.dev.identify()
+        with patch.object(self.dev, 'shell', side_effect=['TEST_MODEL', '29']):
+            with self.assertRaises(tv.SafetyError):
+                self.dev.identify()
+        with patch.object(self.dev, 'shell', side_effect=['TEST_MODEL', '30', ''] + ['']):
+            with self.assertRaises(tv.SafetyError):
+                self.dev.identify()
+        with patch.object(self.dev, 'shell', side_effect=['TEST_MODEL', '30', 'FAKE_DEVICE_IDENTIFIER']):
+            result = self.dev.identify()
+            self.assertEqual(64, len(result['identity']))
+            self.assertNotIn('FAKE_DEVICE_IDENTIFIER', str(result))
 
     def test_set_state_checks_device_not_just_adb_exit_status(self):
         with patch.object(self.dev, 'shell', return_value=''), patch.object(self.dev, 'enabled_state', return_value=0):
