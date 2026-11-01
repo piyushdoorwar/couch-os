@@ -13,7 +13,9 @@ APPROVED_BINARY = {
     'app/src/main/res/font/poppins_extrabold.ttf': 'f2ab17c1a63a0ecc12c2461848fc8a469395e3cd2d641803e889c643d9f958e1',
     'app/src/main/res/font/poppins_black.ttf': 'd82aaaf98a9283f9a8edd24e51173337d8eaf09e25cd3d98831f8ec8461748a1',
     # GoogleSansFlex from github.com/google/fonts ofl/googlesansflex, slimmed as described in docs/design.md.
-    'app/src/main/res/font/google_sans_flex.ttf': '0354e2f920f81991f5a6dff9717e87b865b5085cdcb8cea12790194853b7bd95',
+    # Both exact files are approved: the original upstream file (in history) and the slimmed one.
+    'app/src/main/res/font/google_sans_flex.ttf': ('a9ac770798857d5e8ac593ced42b22e40a7c08cec98319f92b0eccc2783a77ba',
+        '0354e2f920f81991f5a6dff9717e87b865b5085cdcb8cea12790194853b7bd95'),
 }
 
 PRIVATE = re.compile(r'(^|/)(captures|build|\.gradle|\.idea)(/|$)|(^|/)local\.properties$|^config/local\.(?!example\.properties$)|\.(keystore|jks|pem|p12|apk|aab|log)$|(^|/)adb-.*\.log$|(^|/)\.env')
@@ -34,7 +36,8 @@ def problems(path, data, private_values=()):
     if PRIVATE.search(path):
         reasons.append('private/generated path')
     if path in APPROVED_BINARY:
-        if hashlib.sha256(data).hexdigest() != APPROVED_BINARY[path]:
+        approved = APPROVED_BINARY[path]
+        if hashlib.sha256(data).hexdigest() not in ((approved,) if isinstance(approved, str) else approved):
             reasons.append('approved binary changed: verify upstream provenance and checksum first')
         return reasons
     try:

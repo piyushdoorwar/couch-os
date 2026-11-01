@@ -15,8 +15,11 @@ session. Do not interpret emulator results as a Toshiba compatibility claim.
 | TV emulator UI | 2 instrumented tests pass on Android TV API 30 x86: D-pad grid/Back, Settings/Wi-Fi/Inputs focus, theme persistence and HOME intent routing |
 | TV emulator ADB | Real dry run, disable-user, returned-package detection and exact-state restore pass; original emulator stock state restored |
 | Visual review | Account-free emulator HOME inspected at 1920×1080; clock/date, top buttons and focus ring fit within safe margins |
-| Toshiba model / OS version | Pending local inventory; API 30+ required |
-| Toshiba Inputs picker | Pending exported component/action discovery |
+| Release build | R8 + resource shrinking + baseline profile; 1.78 MB APK; non-debuggable build launched, rendered, opened settings and showed the network name on the TV emulator with no crash |
+| Private settings channel | `content write` over stdin accepted a valid config and rejected malformed input, keeping the previous file (emulator) |
+| Remote navigation with carousel | UI tests pass with and without the "Jump back in" card |
+| Toshiba model / OS version | Android TV 11, API 30 (read-only inventory, 1 Nov 2026) |
+| Toshiba Inputs picker | `com.android.tv.action.VIEW_INPUTS` opens `com.vt.tv.input` (observed via the Input key) |
 | Physical voice key / hands-free Assistant | Pending baseline, post-apply, standby/wake and reboot tests |
 | Ambient / Google Photos | Pending before/after comparison on the physical TV |
 | Physical apply / restore / OTA | Pending local runbook execution |

@@ -16,3 +16,14 @@ com.google.android.tv	keep	inputs	Possible OEM Live TV application
 com.android.bluetooth	keep	remote	Bluetooth remote and accessories
 com.android.providers.tv	keep	inputs	TV input and channel provider
 com.google.android.tv.frameworkpackagestubs	keep	system	Framework integration; no evidence it is safe to disable
+com.hisense.tv.smartservice	candidate	tracking	Suspected Hisense usage reporting (app-run events with device serial seen in logcat); select only after the runbook maps the LogReportUtils process to this package
+com.hisense.storemode	candidate	promo	Retail store demo mode; not used at home
+com.vt.tv.input	keep	inputs	Input picker (handles com.android.tv.action.VIEW_INPUTS on this TV)
+com.mediatek.wwtv.tvcenter	keep	inputs	Live TV, tuner and source menus
+com.mediatek.tv.service	keep	chipset	MediaTek TV platform service
+com.hisense.tv.hitvinput	keep	inputs	Hisense TV input service
+com.hisense.uifac	keep	system	Factory and service menu
+com.hisense.tv.ota	keep	updates	Firmware updates
+com.hisense.remoteupgrade	keep	updates	Firmware/remote upgrade service
+com.hisense.udpserver	keep	remote	Phone remote and network control
+com.mediatek.autopair	keep	remote	Remote pairing

@@ -38,13 +38,15 @@ Install JDK 17 and Android SDK platform 35 / build-tools 35.0.0. Set
 `ANDROID_HOME` in your shell (SDK tooling only). Then:
 
 ```sh
-./gradlew assembleDebug testDebugUnitTest lintDebug
+./gradlew assembleRelease testDebugUnitTest lintDebug
 python3 -m unittest discover -s tests -v
 ```
 
-The generic debug APK is `app/build/outputs/apk/debug/app-debug.apk`. CI builds
-and uploads the same APK without personal configuration. Keep the debug signing
-key local and stable for TV updates; a CI debug key may differ between builds.
+Use the optimized release APK on the TV: `app/build/outputs/apk/release/app-release.apk`
+(R8, resource shrinking, baseline profile; about 1.8 MB against 26 MB for debug). It is
+signed with this machine's debug key so it upgrades an earlier install in place. CI
+builds both without personal configuration; a CI key differs from yours, so install
+your own local build on the TV.
 
 See [the laptop runbook](docs/local-runbook.md) before doing anything to the TV.
 Turn debugging off and revoke debugging authorisations when finished.
@@ -71,8 +73,12 @@ session supplies device evidence. There is no automatic debloat default.
 ./scripts/install.sh --yes
 ./scripts/apply.sh                 # dry run
 ./scripts/apply.sh --yes
+# Optional, reversible: halve system animation durations for a snappier feel.
+./scripts/animations.sh            # dry run
+./scripts/animations.sh --yes
 # To recover:
 ./scripts/restore.sh --yes
+./scripts/animations.sh --restore --yes
 ```
 
 A stable local debug signing key supports repeated installs. The scripts never

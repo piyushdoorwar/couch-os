@@ -23,7 +23,7 @@ jobs:
       - name: Script and policy tests
         run: python3 -m unittest discover -s tests -v
       - name: Build, unit tests and lint
-        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+        run: ./gradlew --no-daemon assembleDebug assembleRelease testDebugUnitTest lintDebug
       - uses: actions/upload-artifact@v4
         with:
           name: couch-os-debug

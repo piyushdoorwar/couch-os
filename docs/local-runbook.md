@@ -100,14 +100,15 @@ reason and public policy row before it can be selected locally.
 ## 4. Build, install and prove HOME
 
 ```sh
-./gradlew assembleDebug testDebugUnitTest lintDebug
+./gradlew assembleRelease testDebugUnitTest lintDebug
 python3 -m unittest discover -s tests -v
 ./scripts/install.sh
 ./scripts/install.sh --yes
 ```
 
 Install first performs a dry run unless `--yes` is supplied. It verifies the model
-and API, installs the generic debug APK, provisions private settings and requests
+and API, installs the optimized release APK (the debug APK only if no release build
+exists), provisions private settings and requests
 Couch OS as HOME. A firmware refusal to select our HOME role stops the script.
 If necessary use the TV's default-app chooser and select Couch OS. If resolution
 already points to Couch OS, test the physical Home key before going further.
@@ -135,13 +136,19 @@ No API key is needed. Updating local config after install uses:
 ./scripts/configure.sh --yes
 ```
 
-Provisioning restarts only Couch OS and writes `local-config.json` through stdin
-into its private files using `run-as`. Personal values never enter Gradle or the
-APK. This requires a debuggable APK. Do not replace it with a release build
-without implementing a private import method. Keep a stable local debug keystore:
-CI debug builds may have a different signing key. If `adb install -r` reports a
-signature mismatch, stop; uninstalling would delete TV settings. Rebuild with
-the original local debug key or let the owner decide about data loss.
+Provisioning restarts only Couch OS and streams `local-config.json` over stdin with
+`adb shell content write` to the app's config provider, which only adb's shell can
+write (it requires `android.permission.DUMP`). A malformed or partial write is
+rejected and the previous settings stay. Personal values never enter Gradle, the APK
+or a command line, and this works for release builds. It also grants or revokes the
+opt-in permissions: location for the Wi-Fi name (`wifi.show_name`) and usage access
+for "Jump back in" (`recent.usage_access`).
+
+Release builds are signed with this machine's debug key, so they upgrade the earlier
+debug install in place and keep settings. Keep `~/.android/debug.keystore`: CI builds
+use a different key. If `adb install -r` reports a signature mismatch, stop;
+uninstalling would delete TV settings. Rebuild with the original local key or let the
+owner decide about data loss.
 
 Use the physical remote to test Couch OS repeatedly and after standby. Where
 stock intent priority still wins, open Couch OS from the app list for this
@@ -179,6 +186,24 @@ the baseline; they do not replace the checks below.
 ./scripts/apply.sh --yes
 ```
 
+### Hisense usage reporting (candidate `com.hisense.tv.smartservice`)
+
+Logcat on this TV showed a `LogReportUtils` process sending app-run events that include
+the device serial. Before selecting the candidate, prove which package owns that process
+(read-only; keep the output private):
+
+```sh
+adb logcat -d | grep LogReportUtils | tail -3          # note the PID column
+adb shell ps -A -o PID,NAME | grep <PID>
+adb shell dumpsys package com.hisense.tv.smartservice | grep -E "versionName|Service|Receiver" | head -20
+```
+
+Select it in `verified.disable.packages` only if the PID belongs to
+`com.hisense.tv.smartservice`. If it belongs to anything else, record the finding in
+`packages.md` and leave it enabled. After applying, test inputs, picture/sound settings,
+the voice key and Ambient mode; restore at the first regression.
+`com.hisense.storemode` (retail demo) is a lower-risk candidate on its own.
+
 Review the dry-run package reasons before the second command. The script refuses
 personal apps, unknown policy entries and protected families; requires the verified
 fallback alongside stock HOME; checks working HOME or the explicitly inspected HOME-role/stock-priority case
@@ -197,6 +222,17 @@ journal to make a failed operation proceed.
 Now repeat the complete remote/inputs/voice/Ambient checklist, and test a cold
 boot plus standby/wake. Stop at the first regression and restore. Ambient and
 Photos must look and behave exactly as before.
+
+### Optional: snappier system animations
+
+```sh
+./scripts/animations.sh                    # shows current -> 0.5 for the three global scales
+./scripts/animations.sh --yes
+./scripts/animations.sh --restore --yes    # puts back the exact saved originals
+```
+
+This only changes Android's window, transition and animator duration scales. The first
+originals are saved privately in `captures/animation-state.json`; running it twice keeps them.
 
 ## 7. Investigate voice only if it regresses
 

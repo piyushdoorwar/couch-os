@@ -1,19 +1,30 @@
 # Toshiba 55C350MP package review
 
-Status: **no inventory from the owner's TV yet; nothing is approved for disable**.
-The retail model is Toshiba 55C350MP, India. Firmware, API level and exact package
-names await the laptop session. Do not treat a package name below as proof it is
-installed. `policy.tsv` is the machine-readable source for candidates and keeps.
-The scripts also require an explicit local verification list.
+Status: **read-only inventory taken on 1 November 2026; nothing has been disabled.**
+Facts from the owner's TV (no serials or personal data): Android TV 11, API 30,
+security patch April 2026; built by Hisense on a MediaTek platform; 1920×1080 UI at
+320 dpi; 123 preinstalled packages. HOME resolves to Google TV
+(`com.google.android.apps.tv.launcherx`); the setup fallback
+`com.google.android.tungsten.setupwraith` is present. Ambient mode is
+`com.google.android.apps.tv.dreamx` (screensaver `…dreamx/.service.Backdrop`); there is no
+`com.google.android.backdrop` and no `com.google.android.tvrecommendations`. The Assistant
+voice service is `com.google.android.katniss`. The input picker is `com.vt.tv.input`,
+reachable with `com.android.tv.action.VIEW_INPUTS`. Google TV's Apps only mode removes the
+Movies/Shows tabs and recommendation rows but still shows a promotional carousel.
+
+`policy.tsv` is the machine-readable source for candidates and keeps. The scripts also
+require an explicit local verification list.
 
 | Candidate package | What it may be | Why consider disabling | Evidence required |
 | --- | --- | --- | --- |
 | `com.google.android.apps.tv.launcherx` | Google TV Home | Stock home with promotions/recommendations | System app; resolved stock HOME before installing Couch OS; remote Home works after replacement |
 | `com.google.android.tvlauncher` | Alternate Android TV Home | Same purpose on other firmware | Verify actual resolved HOME; never select two stock launchers by guessing |
 | `com.google.android.tungsten.setupwraith` | Google TV setup fallback | May restore stock Home after boot/update | Inspect package/activities and system status; finish initial TV setup first |
-| `com.google.android.tvrecommendations` | TV recommendation provider | Unwanted recommendation feed | Inspect services/dependents, then retest Assistant and Ambient; leave enabled if uncertain |
+| `com.google.android.tvrecommendations` | TV recommendation provider | Unwanted recommendation feed | Not installed on this unit |
+| `com.hisense.tv.smartservice` | Suspected Hisense usage reporting | Logcat shows `LogReportUtils` sending app-run events with the device serial | Map the reporting PID to this package (runbook §6); then retest inputs, picture settings and voice |
+| `com.hisense.storemode` | Retail demo mode | Not used at home | Confirm it is not running as part of normal picture modes |
 
-No guessed ACR, vendor tracking or promo packages are disabled. When inventory
+No other ACR, vendor tracking or promo packages are guessed. When inventory
 identifies one, record its exact preinstalled package, purpose, evidence and why
 it is safe here; add a `candidate` row to `policy.tsv`; then opt in locally via
 `verified.disable.packages`. Unknown packages stay enabled. A package with an

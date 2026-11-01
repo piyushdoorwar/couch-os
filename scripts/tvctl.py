@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / 'config/local.properties'
 CAPTURES = ROOT / 'captures'
 STATE = CAPTURES / 'apply-state.json'
+ANIMATION_STATE = CAPTURES / 'animation-state.json'
+ANIMATION_KEYS = ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale')
+ANIMATION_VALUE = re.compile(r'(null|\d+(\.\d+)?)\Z')
 APP = 'dev.couch.launcher'
 HOME = APP + '/.MainActivity'
 CONFIG_URI = 'content://dev.couch.launcher.config/local-config.json'
@@ -379,10 +382,13 @@ def configure(device, config):
 
 
 def install(device, config, yes):
-    apk = ROOT / 'app/build/outputs/apk/debug/app-debug.apk'
-    require(apk.exists(), 'Build the debug APK first: ./gradlew assembleDebug')
+    # The optimized release build is the one to live with; debug is only a fallback for development.
+    release, debug = ROOT / 'app/build/outputs/apk/release/app-release.apk', ROOT / 'app/build/outputs/apk/debug/app-debug.apk'
+    apk = release if release.exists() else debug
+    require(apk.exists(), 'Build the APK first: ./gradlew assembleRelease')
     device.identify()
-    print('Install generic Couch OS debug APK, provision private config, then set it as HOME. No packages will be disabled.')
+    kind = 'optimized release' if apk == release else 'debug (slower; build assembleRelease for daily use)'
+    print(f'Install generic Couch OS {kind} APK, provision private config, then set it as HOME. No packages will be disabled.')
     if not yes:
         print('Dry run only. Re-run install.sh --yes.')
         return
@@ -419,6 +425,36 @@ def check(device):
         print('No journaled disabled packages returned; HOME still resolves to Couch OS.')
     print('No changes made. Recheck voice, inputs and Ambient/Photos; disable debugging when finished.')
     return 2 if changed else 0
+
+
+def animations(device, yes, restore=False):
+    """Halve Android's window/transition/animator durations for a snappier TV, or put back the saved values."""
+    device.identify()
+    current = {key: device.shell('settings', 'get', 'global', key) or 'null' for key in ANIMATION_KEYS}
+    require(all(ANIMATION_VALUE.fullmatch(v) for v in current.values()), 'Unexpected animation setting on the TV; inspect locally.')
+    if restore:
+        require(ANIMATION_STATE.exists(), 'No saved animation values, so nothing to restore.')
+        target = json.loads(ANIMATION_STATE.read_text())
+        require(set(target) == set(ANIMATION_KEYS) and all(ANIMATION_VALUE.fullmatch(v) for v in target.values()),
+                'Saved animation values are malformed; inspect captures/animation-state.json.')
+    else:
+        target = {key: '0.5' for key in ANIMATION_KEYS}
+    for key in ANIMATION_KEYS:
+        print(f'{key}: {current[key]} -> {target[key]}')
+    if not yes:
+        print('Dry run only. Re-run with --yes.' + ('' if restore else ' animations.sh --restore --yes puts the saved values back.'))
+        return
+    if not restore and not ANIMATION_STATE.exists():
+        # Keep the very first original values, even if this is run twice.
+        save_json(ANIMATION_STATE, current)
+    for key in ANIMATION_KEYS:
+        if target[key] == 'null':
+            device.shell('settings', 'delete', 'global', key)
+        else:
+            device.shell('settings', 'put', 'global', key, target[key])
+    if restore:
+        ANIMATION_STATE.unlink()
+    print('Done. Animation speed changes apply immediately; nothing else was touched.')
 
 
 def connect(device, config):
@@ -469,8 +505,9 @@ def diagnose(device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('command', choices=['connect', 'inventory', 'apply', 'restore', 'check', 'configure', 'install', 'diagnose', 'disconnect'])
+    parser.add_argument('command', choices=['connect', 'inventory', 'apply', 'restore', 'check', 'configure', 'install', 'diagnose', 'disconnect', 'animations'])
     parser.add_argument('--yes', action='store_true')
+    parser.add_argument('--restore', action='store_true', help='animations: put back the saved original values')
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -494,6 +531,8 @@ def main():
                 print('Dry run. configure.sh --yes copies local favourites/location into private TV app storage.')
             else:
                 configure(device, config)
+        elif args.command == 'animations':
+            animations(device, args.yes, args.restore)
         elif args.command == 'install':
             install(device, config, args.yes)
         elif args.command == 'check':

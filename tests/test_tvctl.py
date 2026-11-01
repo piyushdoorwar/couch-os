@@ -72,7 +72,8 @@ class TvSafetyTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name) / 'captures'
         self.state = self.directory / 'apply-state.json'
-        self.patch = patch.multiple(tv, CAPTURES=self.directory, STATE=self.state)
+        self.patch = patch.multiple(tv, CAPTURES=self.directory, STATE=self.state,
+                                    ANIMATION_STATE=self.directory / 'animation-state.json')
         self.patch.start()
         self.addCleanup(self.patch.stop)
         self.dev = FakeDevice()
@@ -316,6 +317,33 @@ class AdbProtocolTests(unittest.TestCase):
             dev.shell = lambda *args, **kwargs: shells.append(args) or ''
             tv.configure(dev, {'wifi.show_name': value})
             self.assertIn(('pm', verb, tv.APP, 'android.permission.ACCESS_FINE_LOCATION'), shells)
+
+    def test_animations_dry_run_apply_and_exact_restore(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        directory = Path(temp.name) / 'captures'
+        redirect = patch.multiple(tv, CAPTURES=directory, ANIMATION_STATE=directory / 'animation-state.json')
+        redirect.start()
+        self.addCleanup(redirect.stop)
+        dev = FakeDevice()
+        settings = {'window_animation_scale': '1.0', 'transition_animation_scale': '', 'animator_duration_scale': '1.0'}
+        def shell(*args, **kwargs):
+            if args[:3] == ('settings', 'get', 'global'):
+                return settings.get(args[3], '')
+            if args[:3] == ('settings', 'put', 'global'):
+                settings[args[3]] = args[4]
+            if args[:3] == ('settings', 'delete', 'global'):
+                settings[args[3]] = ''
+            return ''
+        dev.shell = shell
+        tv.animations(dev, yes=False)
+        self.assertEqual('1.0', settings['window_animation_scale'])
+        tv.animations(dev, yes=True)
+        self.assertEqual({'0.5'}, set(settings.values()))
+        tv.animations(dev, yes=True)  # a second run must not overwrite the saved originals
+        tv.animations(dev, yes=True, restore=True)
+        self.assertEqual({'window_animation_scale': '1.0', 'transition_animation_scale': '', 'animator_duration_scale': '1.0'}, settings)
+        self.assertFalse(tv.ANIMATION_STATE.exists())
 
     def test_usage_access_is_opt_in(self):
         for value, mode in (('true', 'allow'), ('', 'default')):
