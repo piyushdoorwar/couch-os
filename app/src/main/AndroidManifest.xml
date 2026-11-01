@@ -11,7 +11,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- "Jump back in" from apps opened anywhere. Only an app-op the owner grants over adb (recent.usage_access). -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <!-- Read the TV's shared Watch Next list (continue-watching rows apps publish to the TV). -->
+    <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
     <queries>
+        <provider android:authorities="android.media.tv" />
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LEANBACK_LAUNCHER" /></intent>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.HOME" /></intent>
     </queries>

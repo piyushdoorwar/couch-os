@@ -51,6 +51,12 @@ class LauncherTest {
         assertEquals("Opened yesterday", RecentApps.ago(now - 30 * 3_600_000L, now))
         assertEquals("Opened 4 days ago", RecentApps.ago(now - 4 * 86_400_000L, now))
     }
+    @Test fun watchNextProgressIsAFractionOnlyWhenKnown() {
+        assertEquals(0.25f, WatchNextSource.progress(15 * 60_000L, 60 * 60_000L)!!, 0.0001f)
+        assertEquals(1f, WatchNextSource.progress(70L, 60L)!!, 0.0001f)
+        assertNull(WatchNextSource.progress(0L, 60L))
+        assertNull(WatchNextSource.progress(10L, 0L))
+    }
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))
         val parsed = LocalConfig.parse(JSONObject("""{"favourites":["example.one","example.one","bad name"],"latitude":91,"longitude":0}"""))

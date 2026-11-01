@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -91,6 +93,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
     val loaded by model.loaded.collectAsStateWithLifecycle()
     val recent by model.recent.collectAsStateWithLifecycle()
     val recentsEnabled by model.recentsEnabled.collectAsStateWithLifecycle()
+    val watchNext by model.watchNext.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("home") }
     LaunchedEffect(homeRequest) { if (homeRequest > 0) page = "home" }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -112,10 +115,13 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         val favourites = favouriteApps(apps, config.favourites)
         favourites + apps.filter { it !in favourites }
     }
-    val jumpBackIn = remember(apps, recent, recentsEnabled) {
+    // Shows the TV exposes come first, then recently used apps; six slides at most.
+    val jumpBackIn = remember(apps, recent, watchNext, recentsEnabled) {
         if (!recentsEnabled) emptyList() else {
             val byPackage = apps.associateBy { it.packageName }
-            recent.mapNotNull { (pkg, at) -> byPackage[pkg]?.let { it to at } }
+            val shows = watchNext.mapNotNull { show -> byPackage[show.packageName]?.let { Slide(it, show.lastEngaged, show) } }
+            val recentApps = recent.mapNotNull { (pkg, at) -> byPackage[pkg]?.let { Slide(it, at, null) } }
+            (shows + recentApps).take(6)
         }
     }
     val launch: (TvApp) -> Unit = { model.launched(it); actions.launch(it) }
@@ -134,7 +140,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Pair<TvApp, Long>>, theme: CouchTheme, monochrome: Boolean,
+private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Slide>, theme: CouchTheme, monochrome: Boolean,
                  config: LocalConfig, actions: SystemActions, launch: (TvApp) -> Unit,
                  temperature: String?, model: LauncherModel, speedEnabled: Boolean, settings: () -> Unit) {
     val firstFocus = initialFocusModifier(apps.map { it.packageName })
@@ -151,7 +157,10 @@ private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Pair<TvApp, Lo
             TopBar(theme, config, model, speedEnabled, actions, settings)
         }
         item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
-            if (recent.isEmpty()) Hero(theme, temperature) else JumpBackIn(recent, theme, monochrome, temperature, launch)
+            if (recent.isEmpty()) Hero(theme, temperature)
+            else JumpBackIn(recent, theme, monochrome, temperature, model.watchNextSource) { slide ->
+                if (slide.show != null) { model.launched(slide.app); actions.openShow(slide.show, slide.app) } else launch(slide.app)
+            }
         }
         item(key = "label", span = { GridItemSpan(maxLineSpan) }) {
             Text("Your apps", color = theme.secondary, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 15.sp,
@@ -290,57 +299,81 @@ private fun Hero(theme: CouchTheme, temperature: String?) {
     }
 }
 
+/** A carousel slide: a show the TV exposes through Watch Next, or a recently used app. */
+@Immutable
+data class Slide(val app: TvApp, val at: Long, val show: WatchNextItem?) {
+    val key get() = app.packageName + (show?.title ?: "")
+}
+
 /**
- * The carousel slot Google TV fills with promotions, used for the owner's recently used apps instead.
- * It never advances on its own: Left/Right flips while it has focus, OK opens the app.
+ * The carousel slot Google TV fills with promotions, used for the owner's own shows and apps instead.
+ * It never advances on its own: Left/Right flips while it has focus, OK opens the show or app.
  */
 @Composable
-private fun JumpBackIn(items: List<Pair<TvApp, Long>>, theme: CouchTheme, monochrome: Boolean, temperature: String?,
-                       launch: (TvApp) -> Unit) {
+private fun JumpBackIn(slides: List<Slide>, theme: CouchTheme, monochrome: Boolean, temperature: String?,
+                       watchNext: WatchNextSource, open: (Slide) -> Unit) {
     val now = rememberMinute()
-    var index by remember(items.map { it.first.packageName }) { mutableIntStateOf(0) }
-    val (app, at) = items[index.coerceIn(0, items.lastIndex)]
-    val context = LocalContext.current
+    var index by remember(slides.map { it.key }) { mutableIntStateOf(0) }
+    val slide = slides[index.coerceIn(0, slides.lastIndex)]
     Row(Modifier.fillMaxWidth().padding(top = 48.dp, bottom = 36.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 32.dp)) {
             Text("${greeting(now.hour)}  •  ${dateLine(now, temperature)}", color = theme.secondary, fontFamily = AppFont,
                 fontSize = 16.sp)
             Spacer(Modifier.height(22.dp))
-            Text("JUMP BACK IN", color = theme.secondary, fontFamily = AppFont, fontWeight = FontWeight.Medium,
-                fontSize = 12.sp, letterSpacing = 2.sp)
-            Crossfade(app, animationSpec = tween(220), label = "jump-title") { shown ->
-                Text(shown.label, color = theme.text, fontFamily = AppFont, fontSize = 46.sp, lineHeight = 56.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (slide.show != null) "CONTINUE WATCHING" else "JUMP BACK IN", color = theme.secondary, fontFamily = AppFont,
+                fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 2.sp)
+            Crossfade(slide, animationSpec = tween(220), label = "jump-title") { shown ->
+                Column {
+                    Text(shown.show?.title ?: shown.app.label, color = theme.text, fontFamily = AppFont, fontSize = 46.sp,
+                        lineHeight = 56.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val detail = if (shown.show != null) listOfNotNull(shown.app.label, shown.show.episode).joinToString("  •  ")
+                        else RecentApps.ago(shown.at, System.currentTimeMillis())
+                    Text(detail, color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                }
             }
-            Text(RecentApps.ago(at, System.currentTimeMillis()), color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp)
-            if (items.size > 1) Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.indices.forEach { i ->
+            if (slides.size > 1) Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                slides.indices.forEach { i ->
                     Box(Modifier.size(if (i == index) 10.dp else 8.dp).clip(CircleShape)
                         .background(if (i == index) theme.text else theme.secondary.copy(alpha = 0.4f)))
                 }
             }
         }
-        Focusable(theme, RoundedCornerShape(12.dp), { launch(app) },
-            Modifier.width(352.dp).aspectRatio(16f / 9f).semantics { contentDescription = "Jump back in: ${app.label}" }
+        Focusable(theme, RoundedCornerShape(12.dp), { open(slide) },
+            Modifier.width(352.dp).aspectRatio(16f / 9f)
+                .semantics { contentDescription = "Jump back in: " + (slide.show?.title ?: slide.app.label) }
                 .onPreviewKeyEvent { event ->
-                    if (items.size < 2 || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (slides.size < 2 || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
-                        Key.DirectionRight -> { index = (index + 1) % items.size; true }
-                        Key.DirectionLeft -> { index = (index - 1 + items.size) % items.size; true }
+                        Key.DirectionRight -> { index = (index + 1) % slides.size; true }
+                        Key.DirectionLeft -> { index = (index - 1 + slides.size) % slides.size; true }
                         else -> false
                     }
                 }) {
-            Crossfade(app, animationSpec = tween(220), label = "jump-art") { shown ->
-                val artwork by produceState(ArtworkCache.peek(shown), shown) {
-                    if (value == null) value = withContext(Dispatchers.IO) { ArtworkCache.load(context, shown) }
-                }
-                artwork?.let {
-                    Image(it.image, null, Modifier.fillMaxSize(), contentScale = if (it.wide) ContentScale.Crop else ContentScale.Fit,
-                        colorFilter = if (monochrome) monochromeFilter(true, it.light) else null)
+            Crossfade(slide, animationSpec = tween(220), label = "jump-art") { shown -> SlideArt(shown, monochrome, watchNext) }
+            slide.show?.progress?.let { progress ->
+                Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.Black.copy(alpha = 0.5f))) {
+                    Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(theme.focus))
                 }
             }
         }
     }
+}
+
+/** Show poster when the publishing app supplied one, otherwise the app's own banner. */
+@Composable
+private fun SlideArt(slide: Slide, monochrome: Boolean, watchNext: WatchNextSource) {
+    val context = LocalContext.current
+    val poster by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, slide) {
+        if (slide.show != null) value = withContext(Dispatchers.IO) { watchNext.poster(slide.show)?.asImageBitmap() }
+    }
+    val artwork by produceState(ArtworkCache.peek(slide.app), slide.app) {
+        if (value == null) value = withContext(Dispatchers.IO) { ArtworkCache.load(context, slide.app) }
+    }
+    val image = poster ?: artwork?.image ?: return
+    val wide = poster != null || artwork?.wide == true
+    Image(image, null, Modifier.fillMaxSize(), contentScale = if (wide) ContentScale.Crop else ContentScale.Fit,
+        colorFilter = if (monochrome) monochromeFilter(true, poster == null && artwork?.light == true) else null)
 }
 
 @Composable

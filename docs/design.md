@@ -10,7 +10,12 @@ Classic theme uses Google TV's dark greys, white focus ring and light-blue pill.
 
 "Jump back in" takes the carousel slot Google TV uses for promotions. Google TV's own
 Continue watching lives inside Google services (many apps report it through Google's
-Engage SDK, off the device), so the carousel shows recently used apps: launches made from Couch OS,
+Engage SDK, off the device). The carousel first reads Android TV's shared Watch Next list
+(title, episode, poster, progress and deep link, exactly what apps exposed to the TV) and
+shows those as "Continue watching". Deep links are confined to the publishing app with URI
+grants stripped. Android normally limits a non-system home to its own Watch Next rows, so
+the launcher logs only the visible row count ("Watch Next rows visible: N") for checking on
+the TV. After shows come recently used apps: launches made from Couch OS,
 plus Android's usage history when the owner opts in with `recent.usage_access=true`.
 Up to five, newest first, from the last two weeks. It never advances by itself; Left/
 Right flips while it has focus and OK opens the app. The history never leaves the TV.

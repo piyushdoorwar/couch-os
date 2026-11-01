@@ -43,5 +43,16 @@ class SystemActions(private val activity: Activity) {
     fun account() = open(Intent("android.settings.USER_SETTINGS"), Intent(Settings.ACTION_SYNC_SETTINGS), Intent(Settings.ACTION_SETTINGS))
     // Starts the configured screensaver (Ambient mode with Google Photos) immediately.
     fun screensaver() = open(Intent().setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
+    /** A show from Watch Next: its own deep link if the app supplied one, otherwise the app itself. */
+    fun openShow(item: WatchNextItem, app: TvApp) {
+        val link = WatchNextSource.deepLink(item)
+        if (link != null) try {
+            activity.startActivity(link)
+            return
+        } catch (_: ActivityNotFoundException) {
+        } catch (_: SecurityException) {
+        }
+        launch(app)
+    }
     fun assist() = open(Intent(Intent.ACTION_VOICE_COMMAND), Intent(Intent.ACTION_ASSIST))
 }

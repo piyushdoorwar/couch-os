@@ -18,6 +18,9 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
     val recents = RecentApps(app)
     private val _recent = MutableStateFlow<List<Pair<String, Long>>>(emptyList())
     val recent = _recent.asStateFlow()
+    val watchNextSource = WatchNextSource(app)
+    private val _watchNext = MutableStateFlow<List<WatchNextItem>>(emptyList())
+    val watchNext = _watchNext.asStateFlow()
     private val _config = MutableStateFlow(LocalConfig())
     val config = _config.asStateFlow()
     private val _themes = MutableStateFlow(listOf(CouchTheme()))
@@ -69,6 +72,7 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
             _apps.value = apps
             _loaded.value = true
             _recent.value = withContext(Dispatchers.IO) { recents.recent(apps.map { it.packageName }.toSet()) }
+            _watchNext.value = withContext(Dispatchers.IO) { watchNextSource.load() }
         }
     }
 }
