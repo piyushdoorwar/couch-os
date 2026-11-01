@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
 class MediaListener : NotificationListenerService() {
     private val io = Executors.newSingleThreadExecutor()
     private val callbacks = mutableMapOf<MediaController, MediaController.Callback>()
+    private val reported = mutableSetOf<String>()
     private var sessions: MediaSessionManager? = null
     private val onSessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { watch(it.orEmpty()) }
 
@@ -57,7 +58,14 @@ class MediaListener : NotificationListenerService() {
     private fun consider(controller: MediaController) {
         if (controller.playbackState?.state != PlaybackState.STATE_PLAYING) return
         val metadata = controller.metadata
-        val item = MediaHistory.describe(controller.packageName, metadata, System.currentTimeMillis()) ?: return
+        val item = MediaHistory.describe(controller.packageName, metadata, System.currentTimeMillis())
+        if (item == null) {
+            // Diagnostic for checking what each app shares: field count only, never values.
+            if (reported.add(controller.packageName)) {
+                Log.i(TAG, "Media playing without a title: ${controller.packageName} fields=${metadata?.keySet()?.size ?: 0}")
+            }
+            return
+        }
         val art = metadata?.let {
             it.getBitmap(MediaMetadata.METADATA_KEY_ART) ?: it.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
                 ?: it.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
