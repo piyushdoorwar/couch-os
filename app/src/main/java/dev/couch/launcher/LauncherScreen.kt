@@ -95,7 +95,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
     Column(Modifier.fillMaxSize().padding(vertical = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 48.dp), horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically) {
-            Text("COUCH OS", color = theme.secondary, fontFamily = Poppins, fontSize = 14.sp,
+            Text("COUCH OS", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                 letterSpacing = 3.sp, modifier = Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 ActionTile("Settings", theme, onClick = settings)
@@ -107,7 +107,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
         ClockHero(theme, temperature)
         Spacer(Modifier.height(20.dp))
         Text("YOUR FAVOURITES", color = theme.secondary, fontSize = 13.sp, letterSpacing = 2.sp,
-            fontFamily = Poppins, modifier = Modifier.padding(start = 48.dp))
+            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 48.dp))
         LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             items(favourites, key = { it.packageName }) { app ->
@@ -118,7 +118,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
                     Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
                         Text("⊞", color = theme.focus, fontSize = 40.sp)
                     }
-                    Text("All apps", color = theme.text, fontFamily = Poppins, fontSize = 16.sp,
+                    Text("All apps", color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                 }
             }
@@ -143,10 +143,11 @@ fun ClockHero(theme: CouchTheme, temperature: String? = null) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Text(now.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)), color = theme.text,
                 fontFamily = Poppins, fontWeight = FontWeight.Black, fontSize = 72.sp, lineHeight = 86.sp)
-            if (temperature != null) Text(temperature, color = theme.text, fontFamily = Poppins, fontSize = 27.sp)
+            if (temperature != null) Text(temperature, color = theme.text, fontFamily = Poppins,
+                fontWeight = FontWeight.SemiBold, fontSize = 27.sp)
         }
         Text(now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)), color = theme.secondary,
-            fontFamily = Poppins, fontSize = 20.sp)
+            fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
     }
 }
 
@@ -158,7 +159,7 @@ private fun AppGrid(apps: List<TvApp>, theme: CouchTheme, actions: SystemActions
             Heading("All apps", theme)
             ActionTile("Back", theme, firstFocus, back)
         }
-        if (apps.isEmpty()) Text("No other TV apps installed", color = theme.secondary, fontFamily = Poppins, modifier = Modifier.padding(top = 32.dp))
+        if (apps.isEmpty()) Text("No other TV apps installed", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 32.dp))
         LazyVerticalGrid(columns = GridCells.Adaptive(184.dp), contentPadding = PaddingValues(16.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             items(apps, key = { it.packageName }) { app -> AppTile(app, theme) { actions.launch(app) } }
@@ -173,7 +174,7 @@ fun Heading(label: String, theme: CouchTheme) = Text(label, color = theme.text, 
 @Composable
 fun ActionTile(label: String, theme: CouchTheme, modifier: Modifier = Modifier, onClick: () -> Unit) {
     FocusTile(theme, onClick, modifier) {
-        Text(label, color = theme.text, fontFamily = Poppins, fontSize = 14.sp,
+        Text(label, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp))
     }
 }
@@ -191,9 +192,9 @@ private fun AppTile(app: TvApp, theme: CouchTheme, modifier: Modifier = Modifier
     FocusTile(theme, onClick, modifier.width(184.dp)) {
         if (bitmap != null) Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxWidth().height(96.dp), contentScale = ContentScale.Fit)
         else Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
-            Text(app.label.take(1), color = theme.text, fontSize = 32.sp, fontFamily = Poppins)
+            Text(app.label.take(1), color = theme.text, fontSize = 32.sp, fontFamily = Poppins, fontWeight = FontWeight.ExtraBold)
         }
-        Text(app.label, color = theme.text, fontFamily = Poppins, fontSize = 16.sp,
+        Text(app.label, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
     }
 }
@@ -228,13 +229,14 @@ private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 48.dp), contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Heading("Make yourself at home", theme) }
-        item { Text("APPEARANCE", color = theme.secondary, fontFamily = Poppins, letterSpacing = 2.sp) }
+        item { Text("APPEARANCE", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp) }
         items(themes, key = { it.id }) { option ->
             ActionTile((if (option.id == theme.id) "✓  " else "") + option.name, theme,
                 if (option == themes.first()) firstFocus else Modifier) { choose(option.id) }
         }
         item { ActionTile("TV settings", theme) { actions.settings() } }
-        item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins, fontSize = 12.sp) }
+        item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins,
+            fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
         item { ActionTile("Back", theme, onClick = back) }
     }
 }
