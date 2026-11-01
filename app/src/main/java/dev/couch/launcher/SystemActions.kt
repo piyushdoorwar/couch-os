@@ -29,7 +29,8 @@ class SystemActions(private val activity: Activity) {
         val intents = mutableListOf<Intent>()
         ComponentName.unflattenFromString(config.inputsComponent)?.let { intents.add(Intent().setComponent(it)) }
         if (config.inputsAction.isNotBlank()) intents.add(Intent(config.inputsAction))
-        // Common TV input-selection action, not a promise about Toshiba's firmware.
+        // VIEW_INPUTS opens the input picker on the 55C350MP (verified on device); SELECT_INPUT is a generic fallback.
+        intents.add(Intent("com.android.tv.action.VIEW_INPUTS"))
         intents.add(Intent("com.android.tv.action.SELECT_INPUT"))
         // Setup-inputs is NOT an input picker. Fall back to settings and the remote's Input key.
         if (!open(*intents.toTypedArray())) {
@@ -38,5 +39,7 @@ class SystemActions(private val activity: Activity) {
     }
     fun launch(app: TvApp) = open(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
         .setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
+    // Google TV "Accounts & profiles"; older builds only expose account sync.
+    fun account() = open(Intent("android.settings.USER_SETTINGS"), Intent(Settings.ACTION_SYNC_SETTINGS), Intent(Settings.ACTION_SETTINGS))
     fun assist() = open(Intent(Intent.ACTION_VOICE_COMMAND), Intent(Intent.ACTION_ASSIST))
 }
