@@ -52,5 +52,30 @@ Turn debugging off and revoke debugging authorisations when finished.
 ## Licence
 
 Project code is MIT. Poppins is separately licensed under SIL OFL 1.1; see
-[font notices](app/src/main/res/font/OFL.txt). Weather: [Open-Meteo](https://open-meteo.com/),
+[font notices](app/src/main/assets/fonts/OFL.txt). Weather: [Open-Meteo](https://open-meteo.com/),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+## Local delivery status
+
+The launcher, three themes, weather, setup/restore tools and CI are implemented.
+[Validation](docs/validation.md) records the checks and the physical-TV work
+still pending. Start the laptop session with [the runbook](docs/local-runbook.md).
+[Package notes](tv/55c350mp/packages.md) are deliberately unverified until that
+session supplies device evidence. There is no automatic debloat default.
+
+```sh
+./scripts/connect.sh
+./scripts/inventory.sh
+# Review the runbook and fill the verified local config before continuing.
+./scripts/install.sh --yes
+./scripts/apply.sh                 # dry run
+./scripts/apply.sh --yes
+# To recover:
+./scripts/restore.sh --yes
+```
+
+A stable local debug signing key supports repeated installs. The scripts never
+uninstall an app to work around a signing mismatch. Preserve the ignored restore
+journal in `captures/apply-state.json`; restore uses it even if policy changes.
+After an update, run `./scripts/check-after-update.sh` to report changes without
+silently applying them.
