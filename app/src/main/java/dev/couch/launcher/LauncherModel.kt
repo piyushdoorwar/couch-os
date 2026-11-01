@@ -19,6 +19,12 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
     private val _recent = MutableStateFlow<List<Pair<String, Long>>>(emptyList())
     val recent = _recent.asStateFlow()
     val watchNextSource = WatchNextSource(app)
+    private val _played = MutableStateFlow<List<PlayedItem>>(emptyList())
+    val played = _played.asStateFlow()
+    fun clearHistory() = viewModelScope.launch {
+        withContext(Dispatchers.IO) { MediaHistory.clear(getApplication()) }
+        _played.value = emptyList()
+    }
     private val _watchNext = MutableStateFlow<List<WatchNextItem>>(emptyList())
     val watchNext = _watchNext.asStateFlow()
     private val _config = MutableStateFlow(LocalConfig())
@@ -78,6 +84,7 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
             }
             _recent.value = withContext(Dispatchers.IO) { recents.recent(apps.map { it.packageName }.toSet()) }
             _watchNext.value = withContext(Dispatchers.IO) { watchNextSource.load() }
+            _played.value = withContext(Dispatchers.IO) { MediaHistory.load(context) }
         }
     }
 }

@@ -54,5 +54,15 @@ class SystemActions(private val activity: Activity) {
         }
         launch(app)
     }
+    /** A show from media history: resume through its live session if the app still has one, else open the app. */
+    fun openPlayed(item: PlayedItem, app: TvApp) {
+        val session = MediaHistory.liveSession(item)
+        if (session != null) try {
+            session.send()
+            return
+        } catch (_: android.app.PendingIntent.CanceledException) {
+        }
+        launch(app)
+    }
     fun assist() = open(Intent(Intent.ACTION_VOICE_COMMAND), Intent(Intent.ACTION_ASSIST))
 }

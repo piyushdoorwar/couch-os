@@ -8,6 +8,16 @@ the date and the weather. "Your apps" is a five-column grid of 16:9 banners: fav
 first in the configured order, then every other TV app alphabetically. The default
 Classic theme uses Google TV's dark greys, white focus ring and light-blue pill.
 
+"Continue watching" comes first when the owner opts in (`history.media_sessions=true`):
+every Android TV video app publishes a media session while playing (it is how "Ok Google,
+pause" works). `MediaListener`, granted notification-listener access over adb, reads only
+those sessions, never notifications, and records the last five distinct shows while they
+are actually playing: app, title, subtitle and the session's artwork. The history lives in
+app-private files, is excluded from backups, is never logged by title, and is hidden as
+soon as access is revoked; Settings has "Clear watch history". OK resumes through the
+app's live session when it still exists, otherwise opens the app. It only knows shows
+played after it was switched on; on the 55C350MP the shared Watch Next list was empty.
+
 "Jump back in" takes the carousel slot Google TV uses for promotions. Google TV's own
 Continue watching lives inside Google services (many apps report it through Google's
 Engage SDK, off the device). The carousel first reads Android TV's shared Watch Next list

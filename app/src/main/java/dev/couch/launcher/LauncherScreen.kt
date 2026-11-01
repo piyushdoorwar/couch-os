@@ -94,6 +94,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
     val recent by model.recent.collectAsStateWithLifecycle()
     val recentsEnabled by model.recentsEnabled.collectAsStateWithLifecycle()
     val watchNext by model.watchNext.collectAsStateWithLifecycle()
+    val played by model.played.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("home") }
     LaunchedEffect(homeRequest) { if (homeRequest > 0) page = "home" }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -115,13 +116,15 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         val favourites = favouriteApps(apps, config.favourites)
         favourites + apps.filter { it !in favourites }
     }
-    // Shows the TV exposes come first, then recently used apps; six slides at most.
-    val jumpBackIn = remember(apps, recent, watchNext, recentsEnabled) {
+    // Shows you played come first, then Watch Next rows the TV exposes, then recently used apps; six at most.
+    val jumpBackIn = remember(apps, recent, watchNext, played, recentsEnabled) {
         if (!recentsEnabled) emptyList() else {
             val byPackage = apps.associateBy { it.packageName }
+            val history = played.mapNotNull { item -> byPackage[item.packageName]?.let { Slide(it, item.at, null, item) } }
             val shows = watchNext.mapNotNull { show -> byPackage[show.packageName]?.let { Slide(it, show.lastEngaged, show) } }
-            val recentApps = recent.mapNotNull { (pkg, at) -> byPackage[pkg]?.let { Slide(it, at, null) } }
-            (shows + recentApps).take(6)
+            val withShows = (history + shows).map { it.app.packageName }.toSet()
+            val recentApps = recent.mapNotNull { (pkg, at) -> byPackage[pkg]?.takeIf { pkg !in withShows }?.let { Slide(it, at, null) } }
+            (history + shows + recentApps).take(6)
         }
     }
     val launch: (TvApp) -> Unit = { model.launched(it); actions.launch(it) }
@@ -130,7 +133,8 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         Box(Modifier.fillMaxSize().background(theme.background)) {
             when (page) {
                 "settings" -> LauncherSettings(themes, theme, model::selectTheme, speedEnabled, model::setSpeedEnabled,
-                    monochrome, model::setMonochrome, recentsEnabled, model::setRecentsEnabled, config, actions) { page = "home" }
+                    monochrome, model::setMonochrome, recentsEnabled, model::setRecentsEnabled,
+                    played.isNotEmpty(), { model.clearHistory() }, config, actions) { page = "home" }
                 else -> Home(ordered, loaded, jumpBackIn, theme, monochrome, config, actions, launch, temperature,
                     model, speedEnabled) { page = "settings" }
             }
@@ -159,7 +163,12 @@ private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Slide>, theme:
         item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
             if (recent.isEmpty()) Hero(theme, temperature)
             else JumpBackIn(recent, theme, monochrome, temperature, model.watchNextSource) { slide ->
-                if (slide.show != null) { model.launched(slide.app); actions.openShow(slide.show, slide.app) } else launch(slide.app)
+                model.launched(slide.app)
+                when {
+                    slide.played != null -> actions.openPlayed(slide.played, slide.app)
+                    slide.show != null -> actions.openShow(slide.show, slide.app)
+                    else -> actions.launch(slide.app)
+                }
             }
         }
         item(key = "label", span = { GridItemSpan(maxLineSpan) }) {
@@ -301,8 +310,10 @@ private fun Hero(theme: CouchTheme, temperature: String?) {
 
 /** A carousel slide: a show the TV exposes through Watch Next, or a recently used app. */
 @Immutable
-data class Slide(val app: TvApp, val at: Long, val show: WatchNextItem?) {
-    val key get() = app.packageName + (show?.title ?: "")
+data class Slide(val app: TvApp, val at: Long, val show: WatchNextItem?, val played: PlayedItem? = null) {
+    val key get() = app.packageName + (played?.title ?: show?.title ?: "")
+    val title get() = played?.title ?: show?.title ?: app.label
+    val isShow get() = played != null || show != null
 }
 
 /**
@@ -320,14 +331,18 @@ private fun JumpBackIn(slides: List<Slide>, theme: CouchTheme, monochrome: Boole
             Text("${greeting(now.hour)}  •  ${dateLine(now, temperature)}", color = theme.secondary, fontFamily = AppFont,
                 fontSize = 16.sp)
             Spacer(Modifier.height(22.dp))
-            Text(if (slide.show != null) "CONTINUE WATCHING" else "JUMP BACK IN", color = theme.secondary, fontFamily = AppFont,
+            Text(if (slide.isShow) "CONTINUE WATCHING" else "JUMP BACK IN", color = theme.secondary, fontFamily = AppFont,
                 fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 2.sp)
             Crossfade(slide, animationSpec = tween(220), label = "jump-title") { shown ->
                 Column {
-                    Text(shown.show?.title ?: shown.app.label, color = theme.text, fontFamily = AppFont, fontSize = 46.sp,
+                    Text(shown.title, color = theme.text, fontFamily = AppFont, fontSize = 46.sp,
                         lineHeight = 56.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val detail = if (shown.show != null) listOfNotNull(shown.app.label, shown.show.episode).joinToString("  •  ")
-                        else RecentApps.ago(shown.at, System.currentTimeMillis())
+                    val ago = RecentApps.ago(shown.at, System.currentTimeMillis()).removePrefix("Opened ")
+                    val detail = when {
+                        shown.played != null -> listOfNotNull(shown.played.subtitle, shown.app.label, ago).joinToString("  •  ")
+                        shown.show != null -> listOfNotNull(shown.app.label, shown.show.episode).joinToString("  •  ")
+                        else -> RecentApps.ago(shown.at, System.currentTimeMillis())
+                    }
                     Text(detail, color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                 }
@@ -341,7 +356,7 @@ private fun JumpBackIn(slides: List<Slide>, theme: CouchTheme, monochrome: Boole
         }
         Focusable(theme, RoundedCornerShape(12.dp), { open(slide) },
             Modifier.width(352.dp).aspectRatio(16f / 9f)
-                .semantics { contentDescription = "Jump back in: " + (slide.show?.title ?: slide.app.label) }
+                .semantics { contentDescription = "Jump back in: " + slide.title }
                 .onPreviewKeyEvent { event ->
                     if (slides.size < 2 || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
@@ -365,7 +380,14 @@ private fun JumpBackIn(slides: List<Slide>, theme: CouchTheme, monochrome: Boole
 private fun SlideArt(slide: Slide, monochrome: Boolean, watchNext: WatchNextSource) {
     val context = LocalContext.current
     val poster by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, slide) {
-        if (slide.show != null) value = withContext(Dispatchers.IO) { watchNext.poster(slide.show)?.asImageBitmap() }
+        value = withContext(Dispatchers.IO) {
+            when {
+                slide.played != null -> MediaHistory.artFile(context, slide.played)?.let { android.graphics.BitmapFactory.decodeFile(it.path) }
+                    ?: slide.played.art?.let { watchNext.poster(WatchNextItem(slide.app.packageName, slide.title, null, it, null, null, 0)) }
+                slide.show != null -> watchNext.poster(slide.show)
+                else -> null
+            }?.asImageBitmap()
+        }
     }
     val artwork by produceState(ArtworkCache.peek(slide.app), slide.app) {
         if (value == null) value = withContext(Dispatchers.IO) { ArtworkCache.load(context, slide.app) }
@@ -499,6 +521,7 @@ private fun LauncherSettings(themes: List<CouchTheme>, theme: CouchTheme, choose
                              speedEnabled: Boolean, setSpeed: (Boolean) -> Unit,
                              monochrome: Boolean, setMonochrome: (Boolean) -> Unit,
                              recentsEnabled: Boolean, setRecents: (Boolean) -> Unit,
+                             hasHistory: Boolean, clearHistory: () -> Unit,
                              config: LocalConfig, actions: SystemActions, back: () -> Unit) {
     val firstFocus = initialFocusModifier()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = Margin), contentPadding = PaddingValues(vertical = 40.dp),
@@ -513,6 +536,7 @@ private fun LauncherSettings(themes: List<CouchTheme>, theme: CouchTheme, choose
         item { RowButton("Live download speed", if (speedEnabled) "On" else "Off", theme) { setSpeed(!speedEnabled) } }
         item { RowButton("App artwork", if (monochrome) "Monochrome" else "Colour", theme) { setMonochrome(!monochrome) } }
         item { RowButton("Jump back in", if (recentsEnabled) "On" else "Off", theme) { setRecents(!recentsEnabled) } }
+        if (hasHistory) item { RowButton("Clear watch history", null, theme) { clearHistory() } }
         item { SectionLabel("THEME", theme) }
         items(themes, key = { it.id }) { option ->
             RowButton(option.name, theme = theme, badge = if (option.id == theme.id) "IN USE" else null) { choose(option.id) }

@@ -385,6 +385,15 @@ class AdbProtocolTests(unittest.TestCase):
         self.assertEqual({'window_animation_scale': '1.0', 'transition_animation_scale': '', 'animator_duration_scale': '1.0'}, settings)
         self.assertFalse(tv.ANIMATION_STATE.exists())
 
+    def test_media_history_listener_is_opt_in(self):
+        for value, verb in (('true', 'allow_listener'), ('', 'disallow_listener')):
+            dev = FakeDevice()
+            shells = []
+            dev.run = lambda *args, **kwargs: ''
+            dev.shell = lambda *args, **kwargs: shells.append(args) or ''
+            tv.configure(dev, {'history.media_sessions': value})
+            self.assertIn(('cmd', 'notification', verb, 'dev.couch.launcher/dev.couch.launcher.MediaListener'), shells)
+
     def test_usage_access_is_opt_in(self):
         for value, mode in (('true', 'allow'), ('', 'default')):
             dev = FakeDevice()

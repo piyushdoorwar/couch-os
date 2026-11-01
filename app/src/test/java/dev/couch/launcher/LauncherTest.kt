@@ -57,6 +57,17 @@ class LauncherTest {
         assertNull(WatchNextSource.progress(0L, 60L))
         assertNull(WatchNextSource.progress(10L, 0L))
     }
+    @Test fun mediaHistoryKeepsFiveNewestDistinctShows() {
+        var list = emptyList<PlayedItem>()
+        (1..7).forEach { i -> list = MediaHistory.merge(list, PlayedItem("app.one", "Show $i", null, i * 1000L, null)) }
+        assertEquals(listOf("Show 7", "Show 6", "Show 5", "Show 4", "Show 3"), list.map { it.title })
+        list = MediaHistory.merge(list, PlayedItem("app.one", "Show 4", "Episode 2", 9000L, null))
+        assertEquals(listOf("Show 4", "Show 7", "Show 6", "Show 5", "Show 3"), list.map { it.title })
+        assertEquals("Episode 2", list.first().subtitle)
+        val roundTrip = MediaHistory.parse(MediaHistory.serialise(list))
+        assertEquals(list, roundTrip)
+        assertTrue(MediaHistory.parse("""[{"pkg":"bad name","title":"x"},{"pkg":"a.b","title":""}]""").isEmpty())
+    }
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))
         val parsed = LocalConfig.parse(JSONObject("""{"favourites":["example.one","example.one","bad name"],"latitude":91,"longitude":0}"""))

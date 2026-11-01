@@ -24,6 +24,11 @@
         <!-- Only adb's shell (and the system) hold DUMP, so only configure.sh can deliver private settings. -->
         <provider android:name=".ConfigProvider" android:authorities="dev.couch.launcher.config"
             android:exported="true" android:permission="android.permission.DUMP" />
+        <!-- Watches media sessions only (no notifications are read) for "Continue watching". Opt-in via adb. -->
+        <service android:name=".MediaListener" android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
+        </service>
         <activity android:name=".MainActivity" android:exported="true"
             android:launchMode="singleTask" android:screenOrientation="landscape">
             <intent-filter>

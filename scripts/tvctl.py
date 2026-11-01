@@ -22,6 +22,7 @@ ANIMATION_VALUE = re.compile(r'(null|\d+(\.\d+)?)\Z')
 APP = 'dev.couch.launcher'
 HOME = APP + '/.MainActivity'
 CONFIG_URI = 'content://dev.couch.launcher.config/local-config.json'
+MEDIA_LISTENER = APP + '/' + APP + '.MediaListener'
 PACKAGE = re.compile(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+\Z')
 COMPONENT = re.compile(r'[A-Za-z][A-Za-z0-9_.]*/[A-Za-z._][A-Za-z0-9_.$]*\Z')
 # Deny entire critical families, including OEM variations unknown to the public policy.
@@ -383,6 +384,9 @@ def configure(device, config):
     device.shell('pm', 'grant' if config.get('wifi.show_name') == 'true' else 'revoke', APP, location)
     # "Jump back in" may also use Android's usage history; app-op, opt-in, reset to default otherwise.
     device.shell('appops', 'set', APP, 'GET_USAGE_STATS', 'allow' if config.get('recent.usage_access') == 'true' else 'default')
+    # "Continue watching" from media sessions needs listener access; opt-in, revoked otherwise (history then hides).
+    device.shell('cmd', 'notification', 'allow_listener' if config.get('history.media_sessions') == 'true' else 'disallow_listener',
+                 MEDIA_LISTENER)
     device.shell('am', 'start', '-n', HOME)
     print('Private launcher config provisioned. No local values were printed or built into the APK.')
 
