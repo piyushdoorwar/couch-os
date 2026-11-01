@@ -37,10 +37,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -50,13 +50,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -213,41 +214,22 @@ private fun monochromeFilter(focused: Boolean, invert: Boolean): ColorFilter {
     return ColorFilter.colorMatrix(matrix)
 }
 
-/** Mean relative luminance of opaque pixels, sampled on a tiny copy. */
-private fun meanLuminance(bitmap: android.graphics.Bitmap): Float {
-    val small = android.graphics.Bitmap.createScaledBitmap(bitmap, 16, 9, true)
-    var sum = 0f
-    var count = 0
-    for (x in 0 until small.width) for (y in 0 until small.height) {
-        val c = small.getPixel(x, y)
-        if (android.graphics.Color.alpha(c) < 128) continue
-        sum += (0.2126f * android.graphics.Color.red(c) + 0.7152f * android.graphics.Color.green(c) +
-            0.0722f * android.graphics.Color.blue(c)) / 255f
-        count++
-    }
-    return if (count == 0) 0f else sum / count
-}
-
 @Composable
 private fun AppTile(app: TvApp, theme: CouchTheme, monochrome: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val artwork = remember(app.artwork) {
-        app.artwork?.let { drawable ->
-            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 320
-            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 180
-            val factor = minOf(1f, 512f / maxOf(width, height))
-            val raw = drawable.toBitmap((width * factor).toInt().coerceAtLeast(1), (height * factor).toInt().coerceAtLeast(1))
-            raw.asImageBitmap() to (meanLuminance(raw) > 0.55f)
-        }
+    val context = LocalContext.current
+    // Tiles render at once; each banner decodes off the main thread and is cached across visits.
+    val artwork by produceState(ArtworkCache.peek(app), app) {
+        if (value == null) value = withContext(Dispatchers.IO) { ArtworkCache.load(context, app) }
     }
-    val bitmap = artwork?.first
-    val light = artwork?.second == true
+    val bitmap = artwork?.image
+    val light = artwork?.light == true
     TileWithCaption(app.label, theme, modifier, onClick) { focused ->
         when {
             bitmap == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(app.label.take(1), color = theme.text, fontSize = 40.sp, fontFamily = Poppins, fontWeight = FontWeight.ExtraBold)
             }
             // Banners are designed edge to edge; square icons sit centred on the surface.
-            app.wide -> Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+            artwork?.wide == true -> Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                 colorFilter = if (monochrome) monochromeFilter(focused, light) else null)
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Image(bitmap, null, Modifier.size(80.dp), contentScale = ContentScale.Fit,
