@@ -6,11 +6,16 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.util.LruCache
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 
-/** A launch component per package. Artwork loads lazily per tile and stays in memory only. */
+/**
+ * A launch component per package. Artwork loads lazily per tile and stays in memory only.
+ * Never mutated after the scan, so tiles may skip recomposition even though ActivityInfo is a platform type.
+ */
+@Immutable
 data class TvApp(val packageName: String, val label: String, val component: ComponentName, val info: ActivityInfo)
 
 class AppCatalog(private val context: Context) {

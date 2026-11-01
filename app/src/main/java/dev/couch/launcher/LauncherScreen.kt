@@ -107,17 +107,6 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
             }
         }
     }
-    // Network name and live speed refresh together, only while HOME is visible. No traffic of their own.
-    val status by produceState(NetworkLabel(Link.OFFLINE, null) to (null as String?), speedEnabled, lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            model.speed.reset()
-            while (true) {
-                val speed = if (speedEnabled) model.speed.sample() ?: value.second else null
-                value = model.network.current() to speed
-                delay(LiveSpeed.SAMPLE_MS)
-            }
-        }
-    }
     // Favourites keep their configured order; every other TV app follows alphabetically.
     val ordered = remember(apps, config.favourites) {
         val favourites = favouriteApps(apps, config.favourites)
@@ -137,7 +126,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
                 "settings" -> LauncherSettings(themes, theme, model::selectTheme, speedEnabled, model::setSpeedEnabled,
                     monochrome, model::setMonochrome, recentsEnabled, model::setRecentsEnabled, config, actions) { page = "home" }
                 else -> Home(ordered, loaded, jumpBackIn, theme, monochrome, config, actions, launch, temperature,
-                    status.first, status.second) { page = "settings" }
+                    model, speedEnabled) { page = "settings" }
             }
         }
     }
@@ -147,7 +136,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
 @Composable
 private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Pair<TvApp, Long>>, theme: CouchTheme, monochrome: Boolean,
                  config: LocalConfig, actions: SystemActions, launch: (TvApp) -> Unit,
-                 temperature: String?, network: NetworkLabel, speed: String?, settings: () -> Unit) {
+                 temperature: String?, model: LauncherModel, speedEnabled: Boolean, settings: () -> Unit) {
     val firstFocus = initialFocusModifier(apps.map { it.packageName })
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
@@ -159,7 +148,7 @@ private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Pair<TvApp, Lo
         contentPadding = PaddingValues(start = Margin, end = Margin, top = 32.dp, bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(22.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item(key = "bar", span = { GridItemSpan(maxLineSpan) }) {
-            TopBar(theme, config, network, speed, actions, settings)
+            TopBar(theme, config, model, speedEnabled, actions, settings)
         }
         item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
             if (recent.isEmpty()) Hero(theme, temperature) else JumpBackIn(recent, theme, monochrome, temperature, launch)
@@ -196,7 +185,7 @@ private val MinimalScroll = object : BringIntoViewSpec {
 }
 
 @Composable
-private fun TopBar(theme: CouchTheme, config: LocalConfig, network: NetworkLabel, speed: String?,
+private fun TopBar(theme: CouchTheme, config: LocalConfig, model: LauncherModel, speedEnabled: Boolean,
                    actions: SystemActions, settings: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
         Focusable(theme, CircleShape, { actions.account() }, Modifier.size(40.dp).semantics { contentDescription = "Google account" },
@@ -219,13 +208,28 @@ private fun TopBar(theme: CouchTheme, config: LocalConfig, network: NetworkLabel
             IconButton(R.drawable.ic_settings, "Quick settings", theme, onClick = settings)
         }
         Spacer(Modifier.weight(1f))
-        StatusLine(theme, network, speed)
+        StatusLine(theme, model, speedEnabled)
     }
 }
 
-/** Replaces Google TV's "time | Google TV" corner: time, network and live download speed. */
+/**
+ * Replaces Google TV's "time | Google TV" corner: time, network and live download speed. It samples on its
+ * own every two seconds while HOME is visible, so only this line redraws, never the app grid.
+ */
 @Composable
-private fun StatusLine(theme: CouchTheme, network: NetworkLabel, speed: String?) {
+private fun StatusLine(theme: CouchTheme, model: LauncherModel, speedEnabled: Boolean) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val status by produceState(NetworkLabel(Link.OFFLINE, null) to (null as String?), speedEnabled, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            model.speed.reset()
+            while (true) {
+                val speed = if (speedEnabled) model.speed.sample() ?: value.second else null
+                value = model.network.current() to speed
+                delay(LiveSpeed.SAMPLE_MS)
+            }
+        }
+    }
+    val (network, speed) = status
     val now = rememberMinute()
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(now.format(DateTimeFormatter.ofPattern("h:mm", Locale.ENGLISH)), color = theme.secondary, fontFamily = AppFont,

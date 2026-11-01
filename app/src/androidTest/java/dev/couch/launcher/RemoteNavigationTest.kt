@@ -34,13 +34,19 @@ class RemoteNavigationTest {
 
     private fun button(label: String) = rule.onNodeWithContentDescription(label)
 
-    /** Top bar, left to right: profile, (Home label), Screensaver, Quick settings. */
+    private fun focused(label: String) = runCatching { button(label).assertIsFocused() }.isSuccess
+
+    /**
+     * Top bar, left to right: profile, (Home label), Screensaver, Quick settings. Up from the grid reaches it
+     * directly, or via the "Jump back in" card, which hands focus to the nearest bar button.
+     */
     private fun openSettings() {
-        remote.pressDPadUp(); idle()
-        button("Google account").assertIsFocused()
-        remote.pressDPadRight(); idle()
-        button("Screensaver").assertIsFocused()
-        remote.pressDPadRight(); idle()
+        repeat(3) { if (!focused("Google account") && !focused("Quick settings")) { remote.pressDPadUp(); idle() } }
+        if (focused("Google account")) {
+            remote.pressDPadRight(); idle()
+            button("Screensaver").assertIsFocused()
+            remote.pressDPadRight(); idle()
+        }
         button("Quick settings").assertIsFocused()
         remote.pressDPadCenter(); idle()
     }
