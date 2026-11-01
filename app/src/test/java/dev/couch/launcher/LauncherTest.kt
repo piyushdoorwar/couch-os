@@ -29,6 +29,14 @@ class LauncherTest {
         assertNull(WeatherCache.format(Double.NaN))
         assertNull(WeatherCache.format(999.0))
     }
+    @Test fun speedFormatsMegabitsAndRejectsNonsense() {
+        assertEquals(80.0, SpeedTest.mbps(10_000_000, 1_000_000_000)!!, 0.001)
+        assertEquals("80 Mbps", SpeedTest.format(80.2))
+        assertEquals("8.4 Mbps", SpeedTest.format(8.4))
+        assertNull(SpeedTest.mbps(0, 1))
+        assertNull(SpeedTest.format(Double.NaN))
+        assertNull(SpeedTest.format(0.0))
+    }
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))
         val parsed = LocalConfig.parse(JSONObject("""{"favourites":["example.one","example.one","bad name"],"latitude":91,"longitude":0}"""))

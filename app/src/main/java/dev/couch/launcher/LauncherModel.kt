@@ -19,7 +19,14 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
     private val _themeId = MutableStateFlow("midnight-mint")
     val themeId = _themeId.asStateFlow()
     val weather = WeatherRepository(app)
+    val speed = SpeedRepository(app)
     private val preferences = app.getSharedPreferences("appearance", Application.MODE_PRIVATE)
+    private val _speedEnabled = MutableStateFlow(preferences.getBoolean("speed", false))
+    val speedEnabled = _speedEnabled.asStateFlow()
+    fun setSpeedEnabled(enabled: Boolean) {
+        _speedEnabled.value = enabled
+        preferences.edit().putBoolean("speed", enabled).apply()
+    }
     private val _homeRequest = MutableStateFlow(0)
     val homeRequest = _homeRequest.asStateFlow()
     fun showHome() { _homeRequest.value += 1 }

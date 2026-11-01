@@ -24,6 +24,13 @@ the TV's network address; there is no analytics endpoint. Cloud backup and devic
 transfer are excluded for app-private files and preferences. The app needs network
 permissions but no location or microphone permission.
 
+Internet speed is off by default. When switched on in settings, HOME shows the
+last download result beside the weather. A test downloads about 10 MB from
+`speed.cloudflare.com` over HTTPS, times everything after the first megabyte, and
+stops after ten seconds. It runs only while HOME is visible, at most every 30
+minutes, and never on a metered network. Cloudflare sees the TV's network address;
+no result leaves the TV.
+
 Poppins 600, 800 and 900 come from the [Google Fonts repository](https://github.com/google/fonts/tree/main/ofl/poppins).
 The font files keep their original names in their internal metadata and carry the
 SIL Open Font License in `app/src/main/assets/fonts/OFL.txt`.

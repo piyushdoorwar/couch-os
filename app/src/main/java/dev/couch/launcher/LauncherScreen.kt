@@ -73,6 +73,21 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
             }
         }
     }
+    val speedEnabled by model.speedEnabled.collectAsStateWithLifecycle()
+    // Opt-in only. Tests run while HOME is visible, so they never compete with a playing app.
+    val speed by produceState<String?>(null, speedEnabled, lifecycleOwner) {
+        if (!speedEnabled) { value = null; return@produceState }
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                if (!model.weather.online()) value = null
+                else {
+                    value = model.speed.cached()
+                    if (model.speed.due(System.currentTimeMillis())) model.speed.measure()?.let { value = it }
+                }
+                delay(60_000L)
+            }
+        }
+    }
     val favourites = remember(apps, config.favourites) { favouriteApps(apps, config.favourites) }
     // Refresh when returning from an app or system settings. No package inventory telemetry.
     LifecycleStartEffect(Unit) { model.refresh(); onStopOrDispose {} }
@@ -81,8 +96,8 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         Box(Modifier.fillMaxSize().background(theme.background)) {
             when (page) {
                 "apps" -> AppGrid(apps.filter { it !in favourites }, theme, actions) { page = "home" }
-                "settings" -> ThemeSettings(themes, theme, model::selectTheme, actions) { page = "home" }
-                else -> Home(favourites, theme, config, actions, temperature, { page = "apps" }, { page = "settings" })
+                "settings" -> ThemeSettings(themes, theme, model::selectTheme, speedEnabled, model::setSpeedEnabled, actions) { page = "home" }
+                else -> Home(favourites, theme, config, actions, temperature, speed, { page = "apps" }, { page = "settings" })
             }
         }
     }
@@ -90,7 +105,7 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
 
 @Composable
 private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig, actions: SystemActions, temperature: String?,
-                 allApps: () -> Unit, settings: () -> Unit) {
+                 speed: String?, allApps: () -> Unit, settings: () -> Unit) {
     val firstFocus = initialFocusModifier(favourites.map { it.packageName })
     Column(Modifier.fillMaxSize().padding(vertical = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 48.dp), horizontalArrangement = Arrangement.End,
@@ -104,7 +119,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
             }
         }
         Spacer(Modifier.weight(1f))
-        ClockHero(theme, temperature)
+        ClockHero(theme, temperature, speed)
         Spacer(Modifier.height(20.dp))
         Text("YOUR FAVOURITES", color = theme.secondary, fontSize = 13.sp, letterSpacing = 2.sp,
             fontFamily = Poppins, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 48.dp))
@@ -128,7 +143,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
 }
 
 @Composable
-fun ClockHero(theme: CouchTheme, temperature: String? = null) {
+fun ClockHero(theme: CouchTheme, temperature: String? = null, speed: String? = null) {
     var now by remember { mutableStateOf(ZonedDateTime.now()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -145,6 +160,11 @@ fun ClockHero(theme: CouchTheme, temperature: String? = null) {
                 fontFamily = Poppins, fontWeight = FontWeight.Black, fontSize = 72.sp, lineHeight = 86.sp)
             if (temperature != null) Text(temperature, color = theme.text, fontFamily = Poppins,
                 fontWeight = FontWeight.SemiBold, fontSize = 27.sp)
+            if (speed != null) Column {
+                Text("INTERNET", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp, letterSpacing = 2.sp)
+                Text(speed, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 27.sp)
+            }
         }
         Text(now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)), color = theme.secondary,
             fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
@@ -224,7 +244,7 @@ fun FocusTile(theme: CouchTheme, onClick: () -> Unit, modifier: Modifier = Modif
 
 @Composable
 private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (String) -> Unit,
-                          actions: SystemActions, back: () -> Unit) {
+                          speedEnabled: Boolean, setSpeed: (Boolean) -> Unit, actions: SystemActions, back: () -> Unit) {
     val firstFocus = initialFocusModifier(themes.map { it.id })
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 48.dp), contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -242,6 +262,14 @@ private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (
                             .padding(horizontal = 10.dp, vertical = 3.dp))
                 }
             }
+        }
+        item { Text("HOME SCREEN", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp) }
+        item {
+            ActionTile("Internet speed: " + (if (speedEnabled) "On" else "Off"), theme) { setSpeed(!speedEnabled) }
+        }
+        item {
+            Text("Downloads ~10 MB from Cloudflare at most every 30 minutes while this screen is visible. Skipped on metered networks.",
+                color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         }
         item { ActionTile("TV settings", theme) { actions.settings() } }
         item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins,
