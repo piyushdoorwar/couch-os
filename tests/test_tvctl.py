@@ -260,6 +260,46 @@ class AdbProtocolTests(unittest.TestCase):
         self.assertEqual('', tv.home_role_from_dump(dump.replace('holders=dev.couch.launcher', 'holders=dev.couch.launcher\n    holders=com.example.other')))
         self.assertEqual('', tv.home_role_from_dump('unknown format'))
 
+    def test_bracketed_user_list_role_dump(self):
+        # Shape of the 55C350MP's Android 11 dump (values replaced).
+        dump = """ROLE MANAGER STATE (dumpsys role):
+{
+  user_states=[
+    {
+      user_id=0
+      version=-1
+      roles=[
+        {
+          name=android.app.role.CALL_SCREENING
+        }
+        {
+          name=android.app.role.HOME
+          holders=dev.couch.launcher
+        }
+      ]
+    }
+    {
+      user_id=10
+      roles=[
+        {
+          name=android.app.role.HOME
+          holders=com.example.other
+        }
+      ]
+    }
+  ]
+}
+"""
+        self.assertEqual(tv.APP, tv.home_role_from_dump(dump))
+        self.assertEqual('', tv.home_role_from_dump(dump.replace('user_id=0', 'user_id=1')))
+
+    def test_unknown_role_command_with_success_status_falls_back_to_dump(self):
+        dev = object.__new__(tv.Device)
+        dev.config = {}
+        dump = "ROLE MANAGER STATE:\n{\n user_states=[\n  {\n   user_id=0\n   roles=[\n    {\n     name=android.app.role.HOME\n     holders=dev.couch.launcher\n    }\n   ]\n  }\n ]\n}\n"
+        dev.shell = lambda *args, **kwargs: 'Unknown command: get-role-holders' if args[:2] == ('cmd', 'role') else dump
+        self.assertEqual(tv.APP, dev.home_role_holder())
+
     def test_parses_home_from_android_command(self):
         with patch.object(self.dev, 'shell', return_value='priority=0\n' + tv.HOME):
             self.assertTrue(self.dev.is_our_home())

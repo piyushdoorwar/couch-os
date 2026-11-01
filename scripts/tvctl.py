@@ -164,11 +164,14 @@ class Device:
     def home_role_holder(self):
         try:
             output = self.shell('cmd', 'role', 'get-role-holders', '--user', '0', 'android.app.role.HOME')
-            holders = [line for line in output.splitlines() if PACKAGE.fullmatch(line)]
-            return holders[0] if len(holders) == 1 else ''
+            # Some Android 11 firmware (the 55C350MP) answers "Unknown command" with exit status 0.
+            if 'unknown command' not in output.lower():
+                holders = [line for line in output.splitlines() if PACKAGE.fullmatch(line)]
+                return holders[0] if len(holders) == 1 else ''
         except SafetyError:
-            # Android 11 has no role getter shell command; inspect the OS role dump.
-            return home_role_from_dump(self.shell('dumpsys', 'role'))
+            pass
+        # Android 11 has no role getter shell command; inspect the OS role dump.
+        return home_role_from_dump(self.shell('dumpsys', 'role'))
 
     def enabled_state(self, package):
         require(PACKAGE.fullmatch(package), 'Invalid package name.')
@@ -214,10 +217,13 @@ def home_role_from_dump(dump):
                 if depth == 0:
                     return dump[start:index + 1]
         return ''
+    # Firmware prints either `user_states={ user_id=0 ... }` or `user_states=[ { user_id=0 ... } ]`
+    # (the 55C350MP). Either way, user 0's block is the brace that opens just before its user_id line.
     users = []
-    for match in re.finditer(r'\buser_states\s*=\s*\{', dump):
-        block = block_at(dump.index('{', match.start()))
-        if re.search(r'(?m)^\s*user_id\s*=\s*0\s*$', block):
+    for match in re.finditer(r'(?m)^\s*user_id\s*=\s*0\s*$', dump):
+        start = dump.rfind('{', 0, match.start())
+        block = block_at(start) if start >= 0 else ''
+        if block and re.search(r'\buser_states\s*=', dump[:start]):
             users.append(block)
     if len(users) != 1:
         return ''
