@@ -25,13 +25,20 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         model.refresh()
     }
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // Only opt in after logcat/physical checks. No RECORD_AUDIO permission or hotword loop.
-        if (model.config.value.voiceHelper &&
-            (event.keyCode == KeyEvent.KEYCODE_ASSIST || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST)) {
-            if (event.action == KeyEvent.ACTION_UP) SystemActions(this).assist()
+    private fun handlesVoiceKey(keyCode: Int) = model.config.value.voiceHelper &&
+        (keyCode == KeyEvent.KEYCODE_ASSIST || keyCode == KeyEvent.KEYCODE_VOICE_ASSIST)
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (handlesVoiceKey(keyCode)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        // Opt in only after physical checks. No RECORD_AUDIO permission or hotword loop.
+        if (handlesVoiceKey(keyCode)) {
+            SystemActions(this).assist()
             return true
         }
-        return super.dispatchKeyEvent(event)
+        return super.onKeyUp(keyCode, event)
     }
 }

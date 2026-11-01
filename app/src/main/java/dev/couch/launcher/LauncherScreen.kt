@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,9 +91,8 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
 @Composable
 private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig, actions: SystemActions, temperature: String?,
                  allApps: () -> Unit, settings: () -> Unit) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(favourites) { first.requestFocus() }
-    Column(Modifier.fillMaxSize().padding(vertical = 32.dp)) {
+    val firstFocus = initialFocusModifier(favourites.map { it.packageName })
+    Column(Modifier.fillMaxSize().padding(vertical = 24.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 48.dp), horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically) {
             Text("COUCH OS", color = theme.secondary, fontFamily = Poppins, fontSize = 14.sp,
@@ -105,56 +105,58 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
         }
         Spacer(Modifier.weight(1f))
         ClockHero(theme, temperature)
-        Spacer(Modifier.height(38.dp))
+        Spacer(Modifier.height(20.dp))
         Text("YOUR FAVOURITES", color = theme.secondary, fontSize = 13.sp, letterSpacing = 2.sp,
             fontFamily = Poppins, modifier = Modifier.padding(start = 48.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 20.dp),
+        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             items(favourites, key = { it.packageName }) { app ->
-                AppTile(app, theme, if (app == favourites.first()) Modifier.focusRequester(first) else Modifier) { actions.launch(app) }
+                AppTile(app, theme, if (app == favourites.first()) firstFocus else Modifier) { actions.launch(app) }
             }
             item(key = "all-apps") {
-                FocusTile(theme, allApps, if (favourites.isEmpty()) Modifier.focusRequester(first) else Modifier) {
-                    Box(Modifier.size(184.dp, 104.dp), contentAlignment = Alignment.Center) {
+                FocusTile(theme, allApps, Modifier.width(184.dp).then(if (favourites.isEmpty()) firstFocus else Modifier)) {
+                    Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
                         Text("⊞", color = theme.focus, fontSize = 40.sp)
                     }
                     Text("All apps", color = theme.text, fontFamily = Poppins, fontSize = 16.sp,
-                        modifier = Modifier.padding(12.dp))
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                 }
             }
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(0.dp))
     }
 }
 
 @Composable
 fun ClockHero(theme: CouchTheme, temperature: String? = null) {
     var now by remember { mutableStateOf(ZonedDateTime.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = ZonedDateTime.now()
-            delay(60_000L - System.currentTimeMillis() % 60_000L)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                now = ZonedDateTime.now()
+                delay(60_000L - System.currentTimeMillis() % 60_000L)
+            }
         }
     }
     Column(Modifier.padding(horizontal = 48.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Text(now.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)), color = theme.text,
-                fontFamily = Poppins, fontWeight = FontWeight.Black, fontSize = 80.sp, lineHeight = 96.sp)
+                fontFamily = Poppins, fontWeight = FontWeight.Black, fontSize = 72.sp, lineHeight = 86.sp)
             if (temperature != null) Text(temperature, color = theme.text, fontFamily = Poppins, fontSize = 27.sp)
         }
         Text(now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)), color = theme.secondary,
-            fontFamily = Poppins, fontSize = 22.sp)
+            fontFamily = Poppins, fontSize = 20.sp)
     }
 }
 
 @Composable
 private fun AppGrid(apps: List<TvApp>, theme: CouchTheme, actions: SystemActions, back: () -> Unit) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { first.requestFocus() }
+    val firstFocus = initialFocusModifier()
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Heading("All apps", theme)
-            ActionTile("Back", theme, Modifier.focusRequester(first), back)
+            ActionTile("Back", theme, firstFocus, back)
         }
         if (apps.isEmpty()) Text("No other TV apps installed", color = theme.secondary, fontFamily = Poppins, modifier = Modifier.padding(top = 32.dp))
         LazyVerticalGrid(columns = GridCells.Adaptive(184.dp), contentPadding = PaddingValues(16.dp),
@@ -178,14 +180,21 @@ fun ActionTile(label: String, theme: CouchTheme, modifier: Modifier = Modifier, 
 
 @Composable
 private fun AppTile(app: TvApp, theme: CouchTheme, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val bitmap = remember(app.artwork) { app.artwork?.toBitmap(320, 180)?.asImageBitmap() }
+    val bitmap = remember(app.artwork) {
+        app.artwork?.let { drawable ->
+            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 320
+            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 180
+            val factor = minOf(1f, 512f / maxOf(width, height))
+            drawable.toBitmap((width * factor).toInt().coerceAtLeast(1), (height * factor).toInt().coerceAtLeast(1)).asImageBitmap()
+        }
+    }
     FocusTile(theme, onClick, modifier.width(184.dp)) {
-        if (bitmap != null) Image(bitmap, contentDescription = null, modifier = Modifier.size(184.dp, 104.dp), contentScale = ContentScale.Fit)
-        else Box(Modifier.size(184.dp, 104.dp), contentAlignment = Alignment.Center) {
+        if (bitmap != null) Image(bitmap, contentDescription = null, modifier = Modifier.fillMaxWidth().height(96.dp), contentScale = ContentScale.Fit)
+        else Box(Modifier.fillMaxWidth().height(96.dp), contentAlignment = Alignment.Center) {
             Text(app.label.take(1), color = theme.text, fontSize = 32.sp, fontFamily = Poppins)
         }
         Text(app.label, color = theme.text, fontFamily = Poppins, fontSize = 16.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
     }
 }
 
@@ -207,25 +216,39 @@ fun FocusTile(theme: CouchTheme, onClick: () -> Unit, modifier: Modifier = Modif
         .clip(shape).background(theme.surface)
         .onFocusChanged { focused = it.isFocused }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-            role = Role.Button, onClick = onClick), content = content)
+            role = Role.Button, onClick = onClick)
+        .padding(6.dp), content = content)
 }
 
 
 @Composable
 private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (String) -> Unit,
                           actions: SystemActions, back: () -> Unit) {
-    val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { first.requestFocus() }
+    val firstFocus = initialFocusModifier(themes.map { it.id })
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 48.dp), contentPadding = PaddingValues(vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Heading("Make yourself at home", theme) }
         item { Text("APPEARANCE", color = theme.secondary, fontFamily = Poppins, letterSpacing = 2.sp) }
         items(themes, key = { it.id }) { option ->
             ActionTile((if (option.id == theme.id) "✓  " else "") + option.name, theme,
-                if (option == themes.first()) Modifier.focusRequester(first) else Modifier) { choose(option.id) }
+                if (option == themes.first()) firstFocus else Modifier) { choose(option.id) }
         }
         item { ActionTile("TV settings", theme) { actions.settings() } }
         item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins, fontSize = 12.sp) }
         item { ActionTile("Back", theme, onClick = back) }
+    }
+}
+
+
+/** Lazy children attach after the parent's composition effects; wait for placement. */
+@Composable
+private fun initialFocusModifier(key: Any = Unit): Modifier {
+    val requester = remember(key) { FocusRequester() }
+    var requested by remember(key) { mutableStateOf(false) }
+    return Modifier.focusRequester(requester).onGloballyPositioned {
+        if (!requested) {
+            requester.requestFocus()
+            requested = true
+        }
     }
 }
