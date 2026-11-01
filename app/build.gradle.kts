@@ -21,7 +21,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        release {
+            // The fast build for the TV: R8 shrinks and optimises, unused resources are dropped,
+            // and the bundled baseline profile pre-compiles startup and scrolling paths.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Personal sideload: sign with the local debug key so it upgrades the debug install in place
+            // and settings survive. The key never leaves this machine and is not a store identity.
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 }
 
 dependencies {
@@ -34,6 +45,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    // Installs the baseline profile (ours and the Compose libraries') on sideloaded builds too.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250107")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))

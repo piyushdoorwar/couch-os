@@ -1,0 +1,5 @@
+# Baseline profile: ahead-of-time compile the launcher's own code paths on install, so the first
+# HOME press, scrolling the grid and opening settings don't wait on the JIT. The Compose and TV
+# libraries ship their own profiles, which AGP merges with this one.
+HSPLdev/couch/launcher/**;->**(**)**
+Ldev/couch/launcher/**;

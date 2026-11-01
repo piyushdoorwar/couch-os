@@ -18,6 +18,7 @@ CAPTURES = ROOT / 'captures'
 STATE = CAPTURES / 'apply-state.json'
 APP = 'dev.couch.launcher'
 HOME = APP + '/.MainActivity'
+CONFIG_URI = 'content://dev.couch.launcher.config/local-config.json'
 PACKAGE = re.compile(r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+\Z')
 COMPONENT = re.compile(r'[A-Za-z][A-Za-z0-9_.]*/[A-Za-z._][A-Za-z0-9_.$]*\Z')
 # Deny entire critical families, including OEM variations unknown to the public policy.
@@ -364,11 +365,10 @@ def configure(device, config):
     if initial:
         data['profileInitial'] = initial.upper()
     device.identify()
-    # Only the debug app supports run-as. No exported activity accepts secret configuration.
     device.shell('am', 'force-stop', APP)
-    device.shell('run-as', APP, 'mkdir', '-p', 'files')
-    # Fixed command only; JSON is stdin, never shell text, argv, a public asset or a temp file.
-    device.run('shell', f"run-as {APP} sh -c 'umask 077; cat > files/local-config.json'", input=json.dumps(data))
+    # JSON is stdin, never shell text, argv, a public asset or a temp file. The app's provider accepts
+    # writes only from holders of android.permission.DUMP (adb shell), and works in release builds.
+    device.run('shell', 'content', 'write', '--uri', CONFIG_URI, input=json.dumps(data))
     # Android reveals the Wi-Fi name only to apps with location permission; opt-in, revoked otherwise.
     location = 'android.permission.ACCESS_FINE_LOCATION'
     device.shell('pm', 'grant' if config.get('wifi.show_name') == 'true' else 'revoke', APP, location)

@@ -3,7 +3,7 @@ package dev.couch.launcher
 import android.content.Context
 import org.json.JSONObject
 
-/** Provisioned into app-private files by scripts/configure.sh; never compiled into an APK. */
+/** Provisioned into app-private files by scripts/configure.sh (via ConfigProvider); never compiled into an APK. */
 data class LocalConfig(
     val favourites: List<String> = emptyList(),
     val latitude: Double? = null,
@@ -15,6 +15,7 @@ data class LocalConfig(
     val profileInitial: String? = null,
 ) {
     companion object {
+        const val FILE = "local-config.json"
         fun parse(json: JSONObject): LocalConfig {
             val entries = json.optJSONArray("favourites")
             val packages = (0 until (entries?.length() ?: 0)).map { entries!!.getString(it) }
@@ -26,7 +27,7 @@ data class LocalConfig(
                 json.optString("profileInitial").take(1).uppercase().takeIf { it.isNotEmpty() && it[0].isLetterOrDigit() })
         }
         fun read(context: Context): LocalConfig = runCatching {
-            parse(JSONObject(context.filesDir.resolve("local-config.json").readText()))
+            parse(JSONObject(context.filesDir.resolve(FILE).readText()))
         }.getOrDefault(LocalConfig())
     }
 }

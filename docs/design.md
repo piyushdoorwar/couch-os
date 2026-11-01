@@ -55,9 +55,22 @@ light logo on a dark plate. Nothing third-party is bundled. Button glyphs are Ma
 Symbols Rounded (Apache License 2.0), stored as vector drawables in `res/drawable`.
 
 Google Sans Flex comes from the [Google Fonts repository](https://github.com/google/fonts/tree/main/ofl/googlesansflex)
-under the SIL Open Font License, unmodified, as a single variable file instanced at
-400–700. Its licence is in `app/src/main/assets/fonts/OFL.txt`. "Google Sans" is a
-Google trademark; Couch OS uses the font but not the name for anything of its own.
+under the SIL Open Font License (no Reserved Font Names); its licence is in
+`app/src/main/assets/fonts/OFL.txt`. To keep the TV fast it is slimmed from 3.9 MB to
+about 118 KB: other axes pinned to their defaults (opsz 18, wdth 100, ROND 0, slnt 0), the
+weight axis limited to 400–700, and glyphs subset to Latin, Latin-1/Extended-A, general
+punctuation, ₹ and arrows. Labels in other scripts fall back to the system font.
+Reproduce with fonttools 4.55.3:
+
+```sh
+fonttools varLib.instancer "GoogleSansFlex[ROND,opsz,slnt,wdth,wght].ttf" opsz=18 wdth=100 ROND=0 slnt=0 wght=400:700 -o instanced.ttf
+pyftsubset instanced.ttf --unicodes="U+0020-007E,U+00A0-017F,U+2000-206F,U+20B9,U+2190-2193,U+2122" \
+  --layout-features='kern,liga,calt,ccmp,locl,mark,mkmk,tnum' --output-file=google_sans_flex.ttf
+```
+
+"Google Sans" is a Google trademark; Couch OS uses the font but not the name for anything
+of its own, and implies no affiliation with Google.
+
 Minimum shipped contrast ratios (across the background and surface):
 
 | Theme | Text / secondary | Focus ring |
