@@ -71,6 +71,11 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
             val apps = withContext(Dispatchers.IO) { AppCatalog(context).load() }
             _apps.value = apps
             _loaded.value = true
+            // Decode every banner up front (favourites first), so scrolling never waits on a decode.
+            launch(Dispatchers.IO) {
+                val favourites = _config.value.favourites.toSet()
+                apps.sortedBy { it.packageName !in favourites }.forEach { ArtworkCache.load(context, it) }
+            }
             _recent.value = withContext(Dispatchers.IO) { recents.recent(apps.map { it.packageName }.toSet()) }
             _watchNext.value = withContext(Dispatchers.IO) { watchNextSource.load() }
         }

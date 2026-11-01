@@ -18,6 +18,7 @@ session. Do not interpret emulator results as a Toshiba compatibility claim.
 | Release build | R8 + resource shrinking + baseline profile; 1.78 MB APK; non-debuggable build launched, rendered, opened settings and showed the network name on the TV emulator with no crash |
 | Private settings channel | `content write` over stdin accepted a valid config and rejected malformed input, keeping the previous file (emulator) |
 | Remote navigation with carousel | UI tests pass with and without the "Jump back in" card |
+| Release build on the 55C350MP | Installed as a normal app (HOME unchanged). After `cmd package compile -m speed-profile`: cold start 0.82 s (1.7 s before compile), 1.9% janky frames over a 14-key D-pad pass, 99th percentile 23 ms (150 ms before). install.sh now compiles right after installing |
 | Toshiba model / OS version | Android TV 11, API 30 (read-only inventory, 1 Nov 2026) |
 | Toshiba Inputs picker | `com.android.tv.action.VIEW_INPUTS` opens `com.vt.tv.input` (observed via the Input key) |
 | Physical voice key / hands-free Assistant | Pending baseline, post-apply, standby/wake and reboot tests |

@@ -43,6 +43,7 @@ class Artwork(val image: ImageBitmap, val wide: Boolean, val light: Boolean)
 object ArtworkCache {
     // An app update installs to a new path, so a stale banner is never reused.
     private fun key(app: TvApp) = app.packageName + "@" + app.info.applicationInfo.sourceDir
+    // Holds every TV app's banner (about 0.4 MB each at 512 px) so the whole grid stays decoded.
     private val cache = LruCache<String, Artwork>(64)
 
     fun peek(app: TvApp): Artwork? = cache.get(key(app))
