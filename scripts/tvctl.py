@@ -372,6 +372,8 @@ def configure(device, config):
     # Android reveals the Wi-Fi name only to apps with location permission; opt-in, revoked otherwise.
     location = 'android.permission.ACCESS_FINE_LOCATION'
     device.shell('pm', 'grant' if config.get('wifi.show_name') == 'true' else 'revoke', APP, location)
+    # "Jump back in" may also use Android's usage history; app-op, opt-in, reset to default otherwise.
+    device.shell('appops', 'set', APP, 'GET_USAGE_STATS', 'allow' if config.get('recent.usage_access') == 'true' else 'default')
     device.shell('am', 'start', '-n', HOME)
     print('Private launcher config provisioned. No local values were printed or built into the APK.')
 

@@ -56,8 +56,8 @@ class RemoteNavigationTest {
 
     @Test fun remoteThemeChoicePersistsAndHomeIntentClosesSettings() {
         openSettings()
-        // Inputs, Network, Google account, All TV settings, Live speed, App artwork, then themes sorted by file name.
-        repeat(6) { remote.pressDPadDown() }
+        // Inputs, Network, Google account, All TV settings, Live speed, App artwork, Jump back in, then themes by file name.
+        repeat(7) { remote.pressDPadDown() }
         idle()
         rule.onNodeWithText("Broadcast").assertIsFocused()
         remote.pressDPadCenter(); idle()

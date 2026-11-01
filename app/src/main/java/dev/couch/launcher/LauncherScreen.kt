@@ -3,8 +3,13 @@ package dev.couch.launcher
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -30,6 +36,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -52,11 +63,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -77,6 +88,9 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
     val homeRequest by model.homeRequest.collectAsStateWithLifecycle()
     val speedEnabled by model.speedEnabled.collectAsStateWithLifecycle()
     val monochrome by model.monochrome.collectAsStateWithLifecycle()
+    val loaded by model.loaded.collectAsStateWithLifecycle()
+    val recent by model.recent.collectAsStateWithLifecycle()
+    val recentsEnabled by model.recentsEnabled.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("home") }
     LaunchedEffect(homeRequest) { if (homeRequest > 0) page = "home" }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -109,42 +123,74 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         val favourites = favouriteApps(apps, config.favourites)
         favourites + apps.filter { it !in favourites }
     }
-    // Refresh when returning from an app or system settings. No package inventory telemetry.
-    LifecycleStartEffect(Unit) { model.refresh(); onStopOrDispose {} }
+    val jumpBackIn = remember(apps, recent, recentsEnabled) {
+        if (!recentsEnabled) emptyList() else {
+            val byPackage = apps.associateBy { it.packageName }
+            recent.mapNotNull { (pkg, at) -> byPackage[pkg]?.let { it to at } }
+        }
+    }
+    val launch: (TvApp) -> Unit = { model.launched(it); actions.launch(it) }
     BackHandler { page = "home" }
     MaterialTheme {
         Box(Modifier.fillMaxSize().background(theme.background)) {
             when (page) {
                 "settings" -> LauncherSettings(themes, theme, model::selectTheme, speedEnabled, model::setSpeedEnabled,
-                    monochrome, model::setMonochrome, config, actions) { page = "home" }
-                else -> Home(ordered, theme, monochrome, config, actions, temperature, status.first, status.second) { page = "settings" }
+                    monochrome, model::setMonochrome, recentsEnabled, model::setRecentsEnabled, config, actions) { page = "home" }
+                else -> Home(ordered, loaded, jumpBackIn, theme, monochrome, config, actions, launch, temperature,
+                    status.first, status.second) { page = "settings" }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Home(apps: List<TvApp>, theme: CouchTheme, monochrome: Boolean, config: LocalConfig, actions: SystemActions,
+private fun Home(apps: List<TvApp>, loaded: Boolean, recent: List<Pair<TvApp, Long>>, theme: CouchTheme, monochrome: Boolean,
+                 config: LocalConfig, actions: SystemActions, launch: (TvApp) -> Unit,
                  temperature: String?, network: NetworkLabel, speed: String?, settings: () -> Unit) {
     val firstFocus = initialFocusModifier(apps.map { it.packageName })
+    val grid = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
     // A quiet wash in place of the promotional carousel.
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to theme.surface.copy(alpha = 0.55f), 0.6f to theme.background)))
-    LazyVerticalGrid(columns = GridCells.Fixed(Columns), modifier = Modifier.fillMaxSize(),
+    // Compose's TV default pivots every focused row to 30% from the top, which hides the top bar.
+    CompositionLocalProvider(LocalBringIntoViewSpec provides MinimalScroll) {
+    LazyVerticalGrid(columns = GridCells.Fixed(Columns), modifier = Modifier.fillMaxSize(), state = grid,
         contentPadding = PaddingValues(start = Margin, end = Margin, top = 32.dp, bottom = 48.dp),
         horizontalArrangement = Arrangement.spacedBy(22.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item(key = "bar", span = { GridItemSpan(maxLineSpan) }) {
             TopBar(theme, config, network, speed, actions, settings)
         }
-        item(key = "hero", span = { GridItemSpan(maxLineSpan) }) { Hero(theme, temperature) }
+        item(key = "hero", span = { GridItemSpan(maxLineSpan) }) {
+            if (recent.isEmpty()) Hero(theme, temperature) else JumpBackIn(recent, theme, monochrome, temperature, launch)
+        }
         item(key = "label", span = { GridItemSpan(maxLineSpan) }) {
             Text("Your apps", color = theme.secondary, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 15.sp,
                 modifier = Modifier.padding(bottom = 14.dp))
         }
-        items(apps, key = { it.packageName }) { app ->
-            AppTile(app, theme, monochrome, if (app == apps.first()) firstFocus else Modifier) { actions.launch(app) }
+        itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
+            // Like Google TV, the top bar stays in view while the first row has focus.
+            val pinTop = if (index < Columns) Modifier.onFocusChanged { if (it.isFocused) scope.launch { grid.animateScrollToItem(0) } }
+                else Modifier
+            AppTile(app, theme, monochrome, pinTop.then(if (index == 0) firstFocus else Modifier)) { launch(app) }
         }
-        if (apps.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+        if (loaded && apps.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
             Text("No TV apps installed", color = theme.secondary, fontFamily = AppFont, fontSize = 17.sp)
+        }
+    }
+    }
+}
+
+/** Scroll only as far as needed to show the focused item. */
+@OptIn(ExperimentalFoundationApi::class)
+private val MinimalScroll = object : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val trailing = offset + size
+        return when {
+            offset >= 0 && trailing <= containerSize -> 0f
+            offset < 0 && trailing > containerSize -> 0f
+            kotlin.math.abs(offset) < kotlin.math.abs(trailing - containerSize) -> offset
+            else -> trailing - containerSize
         }
     }
 }
@@ -219,21 +265,77 @@ private fun rememberMinute(): ZonedDateTime {
     return now
 }
 
+private fun greeting(hour: Int) = when (hour) {
+    in 5..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
+}
+
+private fun dateLine(now: ZonedDateTime, temperature: String?) =
+    listOfNotNull(now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)), temperature).joinToString("  •  ")
+
 /** Where Google TV runs sponsored artwork: a greeting, the date and the weather. */
 @Composable
 private fun Hero(theme: CouchTheme, temperature: String?) {
     val now = rememberMinute()
-    val greeting = when (now.hour) {
-        in 5..11 -> "Good morning"
-        in 12..16 -> "Good afternoon"
-        else -> "Good evening"
-    }
     Column(Modifier.fillMaxWidth().padding(top = 96.dp, bottom = 48.dp)) {
-        Text(greeting, color = theme.text, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 46.sp, lineHeight = 54.sp)
+        Text(greeting(now.hour), color = theme.text, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 46.sp,
+            lineHeight = 54.sp)
         Spacer(Modifier.height(12.dp))
-        val date = now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH))
-        Text(listOfNotNull(date, temperature).joinToString("  •  "), color = theme.secondary, fontFamily = AppFont,
-            fontSize = 18.sp)
+        Text(dateLine(now, temperature), color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp)
+    }
+}
+
+/**
+ * The carousel slot Google TV fills with promotions, used for the owner's recently used apps instead.
+ * It never advances on its own: Left/Right flips while it has focus, OK opens the app.
+ */
+@Composable
+private fun JumpBackIn(items: List<Pair<TvApp, Long>>, theme: CouchTheme, monochrome: Boolean, temperature: String?,
+                       launch: (TvApp) -> Unit) {
+    val now = rememberMinute()
+    var index by remember(items.map { it.first.packageName }) { mutableIntStateOf(0) }
+    val (app, at) = items[index.coerceIn(0, items.lastIndex)]
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth().padding(top = 48.dp, bottom = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("${greeting(now.hour)}  •  ${dateLine(now, temperature)}", color = theme.secondary, fontFamily = AppFont,
+                fontSize = 16.sp)
+            Spacer(Modifier.height(22.dp))
+            Text("JUMP BACK IN", color = theme.secondary, fontFamily = AppFont, fontWeight = FontWeight.Medium,
+                fontSize = 12.sp, letterSpacing = 2.sp)
+            Crossfade(app, animationSpec = tween(220), label = "jump-title") { shown ->
+                Text(shown.label, color = theme.text, fontFamily = AppFont, fontSize = 46.sp, lineHeight = 56.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(RecentApps.ago(at, System.currentTimeMillis()), color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp)
+            if (items.size > 1) Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.indices.forEach { i ->
+                    Box(Modifier.size(if (i == index) 10.dp else 8.dp).clip(CircleShape)
+                        .background(if (i == index) theme.text else theme.secondary.copy(alpha = 0.4f)))
+                }
+            }
+        }
+        Focusable(theme, RoundedCornerShape(12.dp), { launch(app) },
+            Modifier.width(352.dp).aspectRatio(16f / 9f).semantics { contentDescription = "Jump back in: ${app.label}" }
+                .onPreviewKeyEvent { event ->
+                    if (items.size < 2 || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    when (event.key) {
+                        Key.DirectionRight -> { index = (index + 1) % items.size; true }
+                        Key.DirectionLeft -> { index = (index - 1 + items.size) % items.size; true }
+                        else -> false
+                    }
+                }) {
+            Crossfade(app, animationSpec = tween(220), label = "jump-art") { shown ->
+                val artwork by produceState(ArtworkCache.peek(shown), shown) {
+                    if (value == null) value = withContext(Dispatchers.IO) { ArtworkCache.load(context, shown) }
+                }
+                artwork?.let {
+                    Image(it.image, null, Modifier.fillMaxSize(), contentScale = if (it.wide) ContentScale.Crop else ContentScale.Fit,
+                        colorFilter = if (monochrome) monochromeFilter(true, it.light) else null)
+                }
+            }
+        }
     }
 }
 
@@ -359,6 +461,7 @@ private fun SectionLabel(label: String, theme: CouchTheme) = Text(label, color =
 private fun LauncherSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (String) -> Unit,
                              speedEnabled: Boolean, setSpeed: (Boolean) -> Unit,
                              monochrome: Boolean, setMonochrome: (Boolean) -> Unit,
+                             recentsEnabled: Boolean, setRecents: (Boolean) -> Unit,
                              config: LocalConfig, actions: SystemActions, back: () -> Unit) {
     val firstFocus = initialFocusModifier()
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = Margin), contentPadding = PaddingValues(vertical = 40.dp),
@@ -372,6 +475,7 @@ private fun LauncherSettings(themes: List<CouchTheme>, theme: CouchTheme, choose
         item { SectionLabel("HOME SCREEN", theme) }
         item { RowButton("Live download speed", if (speedEnabled) "On" else "Off", theme) { setSpeed(!speedEnabled) } }
         item { RowButton("App artwork", if (monochrome) "Monochrome" else "Colour", theme) { setMonochrome(!monochrome) } }
+        item { RowButton("Jump back in", if (recentsEnabled) "On" else "Off", theme) { setRecents(!recentsEnabled) } }
         item { SectionLabel("THEME", theme) }
         items(themes, key = { it.id }) { option ->
             RowButton(option.name, theme = theme, badge = if (option.id == theme.id) "IN USE" else null) { choose(option.id) }

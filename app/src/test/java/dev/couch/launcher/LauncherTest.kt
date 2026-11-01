@@ -38,6 +38,19 @@ class LauncherTest {
         assertNull(LiveSpeed.mbps(10, 0))
         assertNull(LiveSpeed.format(Double.NaN))
     }
+    @Test fun jumpBackInKeepsNewestInstalledAppsWithinTwoWeeks() {
+        val now = 100L * 24 * 60 * 60 * 1000
+        val times = mapOf("a.one" to now - 1_000, "b.two" to now - 60_000, "gone.app" to now, "old.app" to now - RecentApps.WINDOW_MS - 1,
+            "future.app" to now + 5_000)
+        val installed = setOf("a.one", "b.two", "old.app", "future.app")
+        assertEquals(listOf("a.one", "b.two"), RecentApps.newestFirst(times, installed, now, 5).map { it.first })
+        assertEquals(listOf("a.one"), RecentApps.newestFirst(times, installed, now, 1).map { it.first })
+        assertEquals("Opened just now", RecentApps.ago(now - 30_000, now))
+        assertEquals("Opened 5 min ago", RecentApps.ago(now - 5 * 60_000, now))
+        assertEquals("Opened 3 h ago", RecentApps.ago(now - 3 * 3_600_000, now))
+        assertEquals("Opened yesterday", RecentApps.ago(now - 30 * 3_600_000L, now))
+        assertEquals("Opened 4 days ago", RecentApps.ago(now - 4 * 86_400_000L, now))
+    }
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))
         val parsed = LocalConfig.parse(JSONObject("""{"favourites":["example.one","example.one","bad name"],"latitude":91,"longitude":0}"""))

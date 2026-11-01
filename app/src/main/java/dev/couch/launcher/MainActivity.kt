@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onResume() {
         super.onResume()
+        // Refresh when returning from an app or system settings. No package inventory telemetry.
         model.refresh()
     }
     private fun handlesVoiceKey(keyCode: Int) = model.config.value.voiceHelper &&

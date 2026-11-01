@@ -8,6 +8,14 @@ the date and the weather. "Your apps" is a five-column grid of 16:9 banners: fav
 first in the configured order, then every other TV app alphabetically. The default
 Classic theme uses Google TV's dark greys, white focus ring and light-blue pill.
 
+"Jump back in" takes the carousel slot Google TV uses for promotions. Google TV's own
+Continue watching lives inside Google services and the shared watch-next table is
+readable only by privileged system apps (checked on the 55C350MP: zero rows visible even
+to adb), so the carousel shows recently used apps instead: launches made from Couch OS,
+plus Android's usage history when the owner opts in with `recent.usage_access=true`.
+Up to five, newest first, from the last two weeks. It never advances by itself; Left/
+Right flips while it has focus and OK opens the app. The history never leaves the TV.
+
 Empty favourites are fine: every launchable TV app still appears in the grid, and
 uninstalled favourites are skipped.
 

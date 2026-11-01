@@ -317,6 +317,15 @@ class AdbProtocolTests(unittest.TestCase):
             tv.configure(dev, {'wifi.show_name': value})
             self.assertIn(('pm', verb, tv.APP, 'android.permission.ACCESS_FINE_LOCATION'), shells)
 
+    def test_usage_access_is_opt_in(self):
+        for value, mode in (('true', 'allow'), ('', 'default')):
+            dev = FakeDevice()
+            shells = []
+            dev.run = lambda *args, **kwargs: ''
+            dev.shell = lambda *args, **kwargs: shells.append(args) or ''
+            tv.configure(dev, {'recent.usage_access': value})
+            self.assertIn(('appops', 'set', tv.APP, 'GET_USAGE_STATS', mode), shells)
+
 
 if __name__ == '__main__':
     unittest.main()

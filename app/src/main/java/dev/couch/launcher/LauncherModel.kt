@@ -12,6 +12,12 @@ import kotlinx.coroutines.withContext
 class LauncherModel(app: Application) : AndroidViewModel(app) {
     private val _apps = MutableStateFlow<List<TvApp>>(emptyList())
     val apps = _apps.asStateFlow()
+    /** False until the first app scan finishes, so an empty grid is never mistaken for "no apps". */
+    private val _loaded = MutableStateFlow(false)
+    val loaded = _loaded.asStateFlow()
+    val recents = RecentApps(app)
+    private val _recent = MutableStateFlow<List<Pair<String, Long>>>(emptyList())
+    val recent = _recent.asStateFlow()
     private val _config = MutableStateFlow(LocalConfig())
     val config = _config.asStateFlow()
     private val _themes = MutableStateFlow(listOf(CouchTheme()))
@@ -34,6 +40,13 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
         _monochrome.value = enabled
         preferences.edit().putBoolean("monochrome", enabled).apply()
     }
+    private val _recentsEnabled = MutableStateFlow(preferences.getBoolean("recents", true))
+    val recentsEnabled = _recentsEnabled.asStateFlow()
+    fun setRecentsEnabled(enabled: Boolean) {
+        _recentsEnabled.value = enabled
+        preferences.edit().putBoolean("recents", enabled).apply()
+    }
+    fun launched(app: TvApp) = recents.recordLaunch(app.packageName)
     private val _homeRequest = MutableStateFlow(0)
     val homeRequest = _homeRequest.asStateFlow()
     fun showHome() { _homeRequest.value += 1 }
@@ -43,11 +56,19 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
             preferences.edit().putString("theme", id).apply()
         }
     }
-    fun refresh() = viewModelScope.launch {
+    // Themes, config and the app scan are independent; load them side by side so tiles appear sooner.
+    fun refresh() {
         val context = getApplication<Application>()
-        _themes.value = withContext(Dispatchers.IO) { ThemeAssets.load(context) }
-        _themeId.value = preferences.getString("theme", "classic") ?: "classic"
-        _config.value = withContext(Dispatchers.IO) { LocalConfig.read(context) }
-        _apps.value = withContext(Dispatchers.IO) { AppCatalog(context).load() }
+        viewModelScope.launch {
+            _themes.value = withContext(Dispatchers.IO) { ThemeAssets.load(context) }
+            _themeId.value = preferences.getString("theme", "classic") ?: "classic"
+        }
+        viewModelScope.launch { _config.value = withContext(Dispatchers.IO) { LocalConfig.read(context) } }
+        viewModelScope.launch {
+            val apps = withContext(Dispatchers.IO) { AppCatalog(context).load() }
+            _apps.value = apps
+            _loaded.value = true
+            _recent.value = withContext(Dispatchers.IO) { recents.recent(apps.map { it.packageName }.toSet()) }
+        }
     }
 }
