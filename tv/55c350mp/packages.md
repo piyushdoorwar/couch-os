@@ -1,6 +1,15 @@
 # Toshiba 55C350MP package review
 
-Status: **read-only inventory taken on 1 November 2026; nothing has been disabled.**
+Status: **applied 1 November 2026.** Disabled with `pm disable-user --user 0`, in this order:
+`com.google.android.tungsten.setupwraith`, then `com.google.android.apps.tv.launcherx`.
+Before that, Couch OS held the HOME role but Google TV still won resolution (its HOME
+filters declare priority 2), so the Home key kept opening Google TV; `cmd package
+set-home-activity` was ignored. After apply, HOME resolves to Couch OS and the Home key
+opens it. Checked afterwards: the remote voice button and "Ok Google" (owner), Ambient
+mode with the owner's Google Photos (owner), input picker, TV Settings, and waking from
+the screensaver back to Couch OS. Ambient mode logs that Google TV's Apps only provider and
+a token from it are unavailable, yet still loads the owner's photos. Nothing else is
+disabled; the Hisense candidates below are still unselected.
 Facts from the owner's TV (no serials or personal data): Android TV 11, API 30,
 security patch April 2026; built by Hisense on a MediaTek platform; 1920×1080 UI at
 320 dpi; 123 preinstalled packages. HOME resolves to Google TV
