@@ -1,0 +1,14 @@
+{
+  "focusWidth": 4.0,
+  "focusScale": 1.045,
+  "id": "forest-crest",
+  "name": "Forest Crest",
+  "background": "#0E1F1A",
+  "surface": "#015D47",
+  "accent": "#015D47",
+  "focus": "#E0F354",
+  "highlight": "#FD550A",
+  "onHighlight": "#14161C",
+  "text": "#FFF4E8",
+  "secondary": "#FFF4E8"
+}

@@ -23,3 +23,47 @@ data class CouchTheme(
     val focusWidth: Float = 4f,
     val focusScale: Float = 1.045f,
 )
+
+/** Pure colour math also used by JVM tests and asset validation. */
+object Contrast {
+    fun ratio(a: String, b: String): Double {
+        fun luminance(hex: String): Double {
+            require(hex.matches(Regex("#[0-9a-fA-F]{6}")))
+            val rgb = hex.drop(1).chunked(2).map {
+                val channel = it.toInt(16) / 255.0
+                if (channel <= 0.04045) channel / 12.92 else Math.pow((channel + 0.055) / 1.055, 2.4)
+            }
+            return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+        }
+        val x = luminance(a)
+        val y = luminance(b)
+        return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
+    }
+}
+
+object ThemeAssets {
+    fun validate(json: org.json.JSONObject) {
+        for (text in listOf("text", "secondary")) {
+            for (background in listOf("background", "surface")) {
+                require(Contrast.ratio(json.getString(text), json.getString(background)) >= 4.5)
+            }
+        }
+        for (background in listOf("background", "surface")) {
+            require(Contrast.ratio(json.getString("focus"), json.getString(background)) >= 3.0)
+        }
+        if (json.has("highlight")) require(Contrast.ratio(json.getString("onHighlight"), json.getString("highlight")) >= 4.5)
+        require(json.getDouble("focusWidth") in 3.0..8.0)
+        require(json.getDouble("focusScale") in 1.01..1.08)
+    }
+    fun parse(json: org.json.JSONObject): CouchTheme {
+        validate(json)
+        fun color(key: String) = Color((0xFF000000L or json.getString(key).drop(1).toLong(16)).toInt())
+        return CouchTheme(json.getString("id"), json.getString("name"), color("background"), color("surface"),
+            color("accent"), color("focus"), color("text"), color("secondary"),
+            json.getDouble("focusWidth").toFloat(), json.getDouble("focusScale").toFloat())
+    }
+    fun load(context: android.content.Context): List<CouchTheme> =
+        context.assets.list("themes").orEmpty().filter { it.endsWith(".json") }.sorted().map {
+            parse(org.json.JSONObject(context.assets.open("themes/$it").bufferedReader().use { reader -> reader.readText() }))
+        }
+}

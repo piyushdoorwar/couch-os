@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -16,6 +17,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,8 +52,26 @@ import java.util.Locale
 fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
     val apps by model.apps.collectAsStateWithLifecycle()
     val config by model.config.collectAsStateWithLifecycle()
-    val theme = CouchTheme()
-    var page by remember { mutableStateOf("home") }
+    val themes by model.themes.collectAsStateWithLifecycle()
+    val themeId by model.themeId.collectAsStateWithLifecycle()
+    val theme = themes.find { it.id == themeId } ?: CouchTheme()
+    val homeRequest by model.homeRequest.collectAsStateWithLifecycle()
+    var page by rememberSaveable { mutableStateOf("home") }
+    LaunchedEffect(homeRequest) { if (homeRequest > 0) page = "home" }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val temperature by produceState<String?>(null, config, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            var lastCheck = 0L
+            while (true) {
+                if (!model.weather.online()) { value = null; lastCheck = 0L }
+                else if (lastCheck == 0L || System.currentTimeMillis() - lastCheck >= WeatherCache.REFRESH_MS) {
+                    value = model.weather.temperature(config)
+                    lastCheck = System.currentTimeMillis()
+                }
+                delay(5_000L)
+            }
+        }
+    }
     val favourites = remember(apps, config.favourites) { favouriteApps(apps, config.favourites) }
     // Refresh when returning from an app or system settings. No package inventory telemetry.
     LifecycleStartEffect(Unit) { model.refresh(); onStopOrDispose {} }
@@ -58,20 +80,15 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
         Box(Modifier.fillMaxSize().background(theme.background)) {
             when (page) {
                 "apps" -> AppGrid(apps.filter { it !in favourites }, theme, actions) { page = "home" }
-                "settings" -> Column(Modifier.padding(48.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Heading("Settings", theme)
-                    Text("Couch OS · private by default", color = theme.secondary, fontFamily = Poppins)
-                    ActionTile("TV settings", theme) { actions.settings() }
-                    ActionTile("Back", theme) { page = "home" }
-                }
-                else -> Home(favourites, theme, config, actions, { page = "apps" }, { page = "settings" })
+                "settings" -> ThemeSettings(themes, theme, model::selectTheme, actions) { page = "home" }
+                else -> Home(favourites, theme, config, actions, temperature, { page = "apps" }, { page = "settings" })
             }
         }
     }
 }
 
 @Composable
-private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig, actions: SystemActions,
+private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig, actions: SystemActions, temperature: String?,
                  allApps: () -> Unit, settings: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(favourites) { first.requestFocus() }
@@ -87,7 +104,7 @@ private fun Home(favourites: List<TvApp>, theme: CouchTheme, config: LocalConfig
             }
         }
         Spacer(Modifier.weight(1f))
-        ClockHero(theme)
+        ClockHero(theme, temperature)
         Spacer(Modifier.height(38.dp))
         Text("YOUR FAVOURITES", color = theme.secondary, fontSize = 13.sp, letterSpacing = 2.sp,
             fontFamily = Poppins, modifier = Modifier.padding(start = 48.dp))
@@ -181,11 +198,34 @@ fun FocusTile(theme: CouchTheme, onClick: () -> Unit, modifier: Modifier = Modif
     Column(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .drawBehind {
             if (focused) drawRoundRect(Brush.radialGradient(listOf(theme.focus.copy(alpha = 0.20f), Color.Transparent),
-                center = center, radius = size.maxDimension * 0.8f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx()))
+                center = center, radius = size.maxDimension * 0.65f),
+                topLeft = androidx.compose.ui.geometry.Offset(-12.dp.toPx(), -12.dp.toPx()),
+                size = androidx.compose.ui.geometry.Size(size.width + 24.dp.toPx(), size.height + 24.dp.toPx()),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx()))
         }
         .border(if (focused) theme.focusWidth.dp else 0.dp, if (focused) theme.focus else Color.Transparent, shape)
         .clip(shape).background(theme.surface)
         .onFocusChanged { focused = it.isFocused }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
             role = Role.Button, onClick = onClick), content = content)
+}
+
+
+@Composable
+private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (String) -> Unit,
+                          actions: SystemActions, back: () -> Unit) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { first.requestFocus() }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 48.dp), contentPadding = PaddingValues(vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        item { Heading("Make yourself at home", theme) }
+        item { Text("APPEARANCE", color = theme.secondary, fontFamily = Poppins, letterSpacing = 2.sp) }
+        items(themes, key = { it.id }) { option ->
+            ActionTile((if (option.id == theme.id) "✓  " else "") + option.name, theme,
+                if (option == themes.first()) Modifier.focusRequester(first) else Modifier) { choose(option.id) }
+        }
+        item { ActionTile("TV settings", theme) { actions.settings() } }
+        item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins, fontSize = 12.sp) }
+        item { ActionTile("Back", theme, onClick = back) }
+    }
 }

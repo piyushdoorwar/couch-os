@@ -17,6 +17,10 @@ class MainActivity : ComponentActivity() {
         WindowInsetsControllerCompat(window, window.decorView).hide(WindowInsetsCompat.Type.systemBars())
         setContent { LauncherScreen(model, SystemActions(this)) }
     }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasCategory(android.content.Intent.CATEGORY_HOME)) model.showHome()
+    }
     override fun onResume() {
         super.onResume()
         model.refresh()

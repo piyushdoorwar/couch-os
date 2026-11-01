@@ -1,0 +1,13 @@
+{
+  "focusWidth": 4.0,
+  "focusScale": 1.045,
+  "id": "broadcast",
+  "name": "Broadcast",
+  "background": "#14161C",
+  "surface": "#1D2029",
+  "accent": "#2438E8",
+  "focus": "#3EE6D2",
+  "alert": "#FF5A47",
+  "text": "#F6F1E7",
+  "secondary": "#F6F1E7"
+}
