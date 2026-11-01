@@ -3,13 +3,15 @@ package dev.couch.launcher
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 
-val Poppins = FontFamily(
-    Font(R.font.poppins_semibold, FontWeight.SemiBold),
-    Font(R.font.poppins_extrabold, FontWeight.ExtraBold),
-    Font(R.font.poppins_black, FontWeight.Black),
-)
+/** Google Sans Flex (SIL OFL 1.1), one variable file instanced at the weights the UI uses. */
+@OptIn(ExperimentalTextApi::class)
+val AppFont = FontFamily(listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map {
+    Font(R.font.google_sans_flex, it, variationSettings = FontVariation.Settings(FontVariation.weight(it.weight)))
+})
 
 data class CouchTheme(
     val id: String = "midnight-mint",

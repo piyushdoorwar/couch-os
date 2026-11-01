@@ -1,0 +1,14 @@
+{
+  "focusWidth": 3.0,
+  "focusScale": 1.08,
+  "id": "classic",
+  "name": "Classic",
+  "background": "#111111",
+  "surface": "#2A2A2A",
+  "accent": "#2A2A2A",
+  "focus": "#FFFFFF",
+  "highlight": "#D3E3FD",
+  "onHighlight": "#0B1D3A",
+  "text": "#E8EAED",
+  "secondary": "#BDC1C6"
+}

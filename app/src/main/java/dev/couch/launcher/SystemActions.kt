@@ -41,5 +41,7 @@ class SystemActions(private val activity: Activity) {
         .setComponent(app.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
     // Google TV "Accounts & profiles"; older builds only expose account sync.
     fun account() = open(Intent("android.settings.USER_SETTINGS"), Intent(Settings.ACTION_SYNC_SETTINGS), Intent(Settings.ACTION_SETTINGS))
+    // Starts the configured screensaver (Ambient mode with Google Photos) immediately.
+    fun screensaver() = open(Intent().setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
     fun assist() = open(Intent(Intent.ACTION_VOICE_COMMAND), Intent(Intent.ACTION_ASSIST))
 }

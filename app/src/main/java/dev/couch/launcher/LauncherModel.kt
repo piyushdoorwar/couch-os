@@ -16,18 +16,19 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
     val config = _config.asStateFlow()
     private val _themes = MutableStateFlow(listOf(CouchTheme()))
     val themes = _themes.asStateFlow()
-    private val _themeId = MutableStateFlow("midnight-mint")
+    private val _themeId = MutableStateFlow("classic")
     val themeId = _themeId.asStateFlow()
     val weather = WeatherRepository(app)
     val speed = SpeedRepository()
+    val network = NetworkStatus(app)
     private val preferences = app.getSharedPreferences("appearance", Application.MODE_PRIVATE)
-    private val _speedEnabled = MutableStateFlow(preferences.getBoolean("speed", false))
+    private val _speedEnabled = MutableStateFlow(preferences.getBoolean("speed", true))
     val speedEnabled = _speedEnabled.asStateFlow()
     fun setSpeedEnabled(enabled: Boolean) {
         _speedEnabled.value = enabled
         preferences.edit().putBoolean("speed", enabled).apply()
     }
-    private val _monochrome = MutableStateFlow(preferences.getBoolean("monochrome", true))
+    private val _monochrome = MutableStateFlow(preferences.getBoolean("monochrome", false))
     val monochrome = _monochrome.asStateFlow()
     fun setMonochrome(enabled: Boolean) {
         _monochrome.value = enabled
@@ -45,7 +46,7 @@ class LauncherModel(app: Application) : AndroidViewModel(app) {
     fun refresh() = viewModelScope.launch {
         val context = getApplication<Application>()
         _themes.value = withContext(Dispatchers.IO) { ThemeAssets.load(context) }
-        _themeId.value = preferences.getString("theme", "midnight-mint") ?: "midnight-mint"
+        _themeId.value = preferences.getString("theme", "classic") ?: "classic"
         _config.value = withContext(Dispatchers.IO) { LocalConfig.read(context) }
         _apps.value = withContext(Dispatchers.IO) { AppCatalog(context).load() }
     }

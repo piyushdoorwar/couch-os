@@ -11,9 +11,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -62,9 +62,10 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val TileWidth = 224.dp
-private val TileHeight = 126.dp
-private val TileShape = RoundedCornerShape(16.dp)
+// Proportions follow the Google TV home: 58 dp side margin, five 16:9 tiles per row.
+private val Margin = 58.dp
+private val TileShape = RoundedCornerShape(8.dp)
+private const val Columns = 5
 
 @Composable
 fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
@@ -92,63 +93,119 @@ fun LauncherScreen(model: LauncherModel, actions: SystemActions) {
             }
         }
     }
-    // Opt-in. Reads kernel byte counters while HOME is visible; generates no traffic itself.
-    val speed by produceState<String?>(null, speedEnabled, lifecycleOwner) {
-        if (!speedEnabled) { value = null; return@produceState }
+    // Network name and live speed refresh together, only while HOME is visible. No traffic of their own.
+    val status by produceState(NetworkLabel(Link.OFFLINE, null) to (null as String?), speedEnabled, lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             model.speed.reset()
             while (true) {
-                model.speed.sample()?.let { value = it }
+                val speed = if (speedEnabled) model.speed.sample() ?: value.second else null
+                value = model.network.current() to speed
                 delay(LiveSpeed.SAMPLE_MS)
             }
         }
     }
-    val favourites = remember(apps, config.favourites) { favouriteApps(apps, config.favourites) }
+    // Favourites keep their configured order; every other TV app follows alphabetically.
+    val ordered = remember(apps, config.favourites) {
+        val favourites = favouriteApps(apps, config.favourites)
+        favourites + apps.filter { it !in favourites }
+    }
     // Refresh when returning from an app or system settings. No package inventory telemetry.
     LifecycleStartEffect(Unit) { model.refresh(); onStopOrDispose {} }
     BackHandler { page = "home" }
     MaterialTheme {
         Box(Modifier.fillMaxSize().background(theme.background)) {
             when (page) {
-                "apps" -> AppGrid(apps.filter { it !in favourites }, theme, monochrome, actions) { page = "home" }
                 "settings" -> LauncherSettings(themes, theme, model::selectTheme, speedEnabled, model::setSpeedEnabled,
-                    monochrome, model::setMonochrome, actions) { page = "home" }
-                else -> Home(favourites, theme, monochrome, config, actions, temperature, speed, { page = "apps" }, { page = "settings" })
+                    monochrome, model::setMonochrome, config, actions) { page = "home" }
+                else -> Home(ordered, theme, monochrome, config, actions, temperature, status.first, status.second) { page = "settings" }
             }
         }
     }
 }
 
 @Composable
-private fun Home(favourites: List<TvApp>, theme: CouchTheme, monochrome: Boolean, config: LocalConfig, actions: SystemActions,
-                 temperature: String?, speed: String?, allApps: () -> Unit, settings: () -> Unit) {
-    val firstFocus = initialFocusModifier(favourites.map { it.packageName })
-    Column(Modifier.fillMaxSize().padding(vertical = 32.dp)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 48.dp), horizontalArrangement = Arrangement.End) {
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                IconButton(R.drawable.ic_input, "Inputs", theme) { actions.inputs(config) }
-                IconButton(R.drawable.ic_wifi, "Wi-Fi", theme) { actions.wifi() }
-                IconButton(R.drawable.ic_account_circle, "Google account", theme) { actions.account() }
-                IconButton(R.drawable.ic_settings, "Settings", theme, onClick = settings)
-            }
+private fun Home(apps: List<TvApp>, theme: CouchTheme, monochrome: Boolean, config: LocalConfig, actions: SystemActions,
+                 temperature: String?, network: NetworkLabel, speed: String?, settings: () -> Unit) {
+    val firstFocus = initialFocusModifier(apps.map { it.packageName })
+    // A quiet wash in place of the promotional carousel.
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to theme.surface.copy(alpha = 0.55f), 0.6f to theme.background)))
+    LazyVerticalGrid(columns = GridCells.Fixed(Columns), modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = Margin, end = Margin, top = 32.dp, bottom = 48.dp),
+        horizontalArrangement = Arrangement.spacedBy(22.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item(key = "bar", span = { GridItemSpan(maxLineSpan) }) {
+            TopBar(theme, config, network, speed, actions, settings)
+        }
+        item(key = "hero", span = { GridItemSpan(maxLineSpan) }) { Hero(theme, temperature) }
+        item(key = "label", span = { GridItemSpan(maxLineSpan) }) {
+            Text("Your apps", color = theme.secondary, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 15.sp,
+                modifier = Modifier.padding(bottom = 14.dp))
+        }
+        items(apps, key = { it.packageName }) { app ->
+            AppTile(app, theme, monochrome, if (app == apps.first()) firstFocus else Modifier) { actions.launch(app) }
+        }
+        if (apps.isEmpty()) item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+            Text("No TV apps installed", color = theme.secondary, fontFamily = AppFont, fontSize = 17.sp)
+        }
+    }
+}
+
+@Composable
+private fun TopBar(theme: CouchTheme, config: LocalConfig, network: NetworkLabel, speed: String?,
+                   actions: SystemActions, settings: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+        Focusable(theme, CircleShape, { actions.account() }, Modifier.size(40.dp).semantics { contentDescription = "Google account" },
+            background = theme.badge) {
+            val initial = config.profileInitial
+            if (initial != null) Text(initial, color = theme.onBadge, fontFamily = AppFont, fontWeight = FontWeight.Medium,
+                fontSize = 20.sp, modifier = Modifier.align(Alignment.Center))
+            else Image(painterResource(R.drawable.ic_account_circle), null, Modifier.align(Alignment.Center).size(26.dp),
+                colorFilter = ColorFilter.tint(theme.onBadge))
+        }
+        Spacer(Modifier.width(14.dp))
+        // Google TV's tab pill; Couch OS has a single page, so it is a label rather than a button.
+        Box(Modifier.clip(RoundedCornerShape(50)).background(theme.badge).padding(horizontal = 18.dp, vertical = 7.dp)) {
+            Text("Home", color = theme.onBadge, fontFamily = AppFont, fontWeight = FontWeight.Medium, fontSize = 17.sp)
+        }
+        Spacer(Modifier.width(14.dp))
+        Row(Modifier.clip(RoundedCornerShape(50)).background(theme.surface.copy(alpha = 0.7f)).padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(R.drawable.ic_screensaver, "Screensaver", theme) { actions.screensaver() }
+            IconButton(R.drawable.ic_settings, "Quick settings", theme, onClick = settings)
         }
         Spacer(Modifier.weight(1f))
-        ClockHero(theme, temperature, speed)
-        Spacer(Modifier.height(36.dp))
-        LazyRow(contentPadding = PaddingValues(horizontal = 48.dp, vertical = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            items(favourites, key = { it.packageName }) { app ->
-                AppTile(app, theme, monochrome, if (app == favourites.first()) firstFocus else Modifier) { actions.launch(app) }
-            }
-            item(key = "all-apps") {
-                GlyphTile(R.drawable.ic_apps, "All apps", theme, if (favourites.isEmpty()) firstFocus else Modifier, allApps)
-            }
+        StatusLine(theme, network, speed)
+    }
+}
+
+/** Replaces Google TV's "time | Google TV" corner: time, network and live download speed. */
+@Composable
+private fun StatusLine(theme: CouchTheme, network: NetworkLabel, speed: String?) {
+    val now = rememberMinute()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(now.format(DateTimeFormatter.ofPattern("h:mm", Locale.ENGLISH)), color = theme.secondary, fontFamily = AppFont,
+            fontSize = 20.sp)
+        Text("  |  ", color = theme.secondary.copy(alpha = 0.6f), fontFamily = AppFont, fontSize = 20.sp)
+        val icon = when (network.link) {
+            Link.WIFI -> R.drawable.ic_wifi
+            Link.ETHERNET -> R.drawable.ic_lan
+            Link.OFFLINE -> R.drawable.ic_wifi_off
+        }
+        Image(painterResource(icon), contentDescription = network.link.name.lowercase(), Modifier.size(20.dp),
+            colorFilter = ColorFilter.tint(theme.secondary))
+        val name = network.name ?: if (network.link == Link.OFFLINE) "Offline" else null
+        if (name != null) Text(" $name", color = theme.secondary, fontFamily = AppFont, fontSize = 20.sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+        if (speed != null && network.link != Link.OFFLINE) {
+            Spacer(Modifier.width(14.dp))
+            Image(painterResource(R.drawable.ic_arrow_downward), contentDescription = "Download", Modifier.size(18.dp),
+                colorFilter = ColorFilter.tint(theme.secondary))
+            Text(speed, color = theme.secondary, fontFamily = AppFont, fontSize = 20.sp)
         }
     }
 }
 
 @Composable
-fun ClockHero(theme: CouchTheme, temperature: String? = null, speed: String? = null) {
+private fun rememberMinute(): ZonedDateTime {
     var now by remember { mutableStateOf(ZonedDateTime.now()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -159,46 +216,30 @@ fun ClockHero(theme: CouchTheme, temperature: String? = null, speed: String? = n
             }
         }
     }
-    Column(Modifier.padding(horizontal = 48.dp)) {
-        Text(now.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)), color = theme.text,
-            fontFamily = Poppins, fontWeight = FontWeight.Black, fontSize = 80.sp, lineHeight = 92.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val parts = listOfNotNull(now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)), temperature)
-            Text(parts.joinToString("   ·   "), color = theme.secondary, fontFamily = Poppins,
-                fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
-            if (speed != null) {
-                Text("   ·   ", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
-                Image(painterResource(R.drawable.ic_arrow_downward), contentDescription = "Download",
-                    colorFilter = ColorFilter.tint(theme.secondary), modifier = Modifier.size(22.dp))
-                Text(" $speed", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
-            }
-        }
+    return now
+}
+
+/** Where Google TV runs sponsored artwork: a greeting, the date and the weather. */
+@Composable
+private fun Hero(theme: CouchTheme, temperature: String?) {
+    val now = rememberMinute()
+    val greeting = when (now.hour) {
+        in 5..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 96.dp, bottom = 48.dp)) {
+        Text(greeting, color = theme.text, fontFamily = AppFont, fontWeight = FontWeight.Normal, fontSize = 46.sp, lineHeight = 54.sp)
+        Spacer(Modifier.height(12.dp))
+        val date = now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH))
+        Text(listOfNotNull(date, temperature).joinToString("  •  "), color = theme.secondary, fontFamily = AppFont,
+            fontSize = 18.sp)
     }
 }
 
 @Composable
-private fun AppGrid(apps: List<TvApp>, theme: CouchTheme, monochrome: Boolean, actions: SystemActions, back: () -> Unit) {
-    val firstFocus = initialFocusModifier(apps.map { it.packageName })
-    Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
-        Heading("All apps", theme)
-        if (apps.isEmpty()) {
-            Text("No other TV apps installed", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 32.dp))
-            Spacer(Modifier.height(24.dp))
-            RowButton("Back", theme = theme, modifier = firstFocus, onClick = back)
-        }
-        LazyVerticalGrid(columns = GridCells.Adaptive(TileWidth), contentPadding = PaddingValues(vertical = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(apps, key = { it.packageName }) { app ->
-                AppTile(app, theme, monochrome, if (app == apps.first()) firstFocus else Modifier) { actions.launch(app) }
-            }
-        }
-    }
-}
-
-@Composable
-fun Heading(label: String, theme: CouchTheme) = Text(label, color = theme.text, fontFamily = Poppins,
-    fontWeight = FontWeight.ExtraBold, fontSize = 30.sp)
+fun Heading(label: String, theme: CouchTheme) = Text(label, color = theme.text, fontFamily = AppFont,
+    fontWeight = FontWeight.Medium, fontSize = 30.sp)
 
 /**
  * Grey version of the app's own artwork, slightly dimmed until focused. Light artwork is inverted so
@@ -226,119 +267,118 @@ private fun AppTile(app: TvApp, theme: CouchTheme, monochrome: Boolean, modifier
     TileWithCaption(app.label, theme, modifier, onClick) { focused ->
         when {
             bitmap == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(app.label.take(1), color = theme.text, fontSize = 40.sp, fontFamily = Poppins, fontWeight = FontWeight.ExtraBold)
+                Text(app.label, color = theme.text, fontSize = 16.sp, fontFamily = AppFont, fontWeight = FontWeight.Medium,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(12.dp))
             }
             // Banners are designed edge to edge; square icons sit centred on the surface.
             artwork?.wide == true -> Image(bitmap, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
                 colorFilter = if (monochrome) monochromeFilter(focused, light) else null)
             else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Image(bitmap, null, Modifier.size(80.dp), contentScale = ContentScale.Fit,
+                Image(bitmap, null, Modifier.size(56.dp), contentScale = ContentScale.Fit,
                     colorFilter = if (monochrome) monochromeFilter(focused, false) else null)
             }
         }
     }
 }
 
-@Composable
-private fun GlyphTile(@DrawableRes icon: Int, label: String, theme: CouchTheme, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    TileWithCaption(label, theme, modifier, onClick) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Image(painterResource(icon), null, Modifier.size(44.dp), colorFilter = ColorFilter.tint(theme.text))
-        }
-    }
-}
-
-/** tvOS-style tile: artwork only; the name appears beneath it while focused. */
+/** 16:9 tile; the app name appears beneath it while focused, as on Google TV. */
 @Composable
 private fun TileWithCaption(label: String, theme: CouchTheme, modifier: Modifier, onClick: () -> Unit,
                             content: @Composable BoxScope.(focused: Boolean) -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val captionAlpha by animateFloatAsState(if (focused) 1f else 0f, spring(stiffness = 600f), label = "caption")
-    Column(modifier.width(TileWidth), horizontalAlignment = Alignment.CenterHorizontally) {
-        Focusable(theme, TileShape, onClick, Modifier.size(TileWidth, TileHeight).semantics { contentDescription = label },
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Focusable(theme, TileShape, onClick, Modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { contentDescription = label },
             onFocus = { focused = it }) { content(focused) }
-        Text(label, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+        Text(label, color = theme.text, fontFamily = AppFont, fontWeight = FontWeight.Medium, fontSize = 14.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 18.dp).graphicsLayer { alpha = captionAlpha })
+            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp).graphicsLayer { alpha = captionAlpha })
     }
 }
 
 @Composable
 private fun IconButton(@DrawableRes icon: Int, label: String, theme: CouchTheme, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Focusable(theme, CircleShape, onClick, modifier.size(56.dp).semantics { contentDescription = label }) {
-        Image(painterResource(icon), null, Modifier.align(Alignment.Center).size(26.dp), colorFilter = ColorFilter.tint(theme.text))
+    Focusable(theme, CircleShape, onClick, modifier.size(36.dp).semantics { contentDescription = label },
+        background = Color.Transparent) {
+        Image(painterResource(icon), null, Modifier.align(Alignment.Center).size(20.dp), colorFilter = ColorFilter.tint(theme.text))
     }
 }
 
 /** One focus treatment everywhere: spring scale, focus-colour ring and a soft glow, drawn only while focused. */
 @Composable
 fun Focusable(theme: CouchTheme, shape: Shape, onClick: () -> Unit, modifier: Modifier = Modifier,
-              onFocus: (Boolean) -> Unit = {}, focusScale: Float = theme.focusScale, content: @Composable BoxScope.() -> Unit) {
+              onFocus: (Boolean) -> Unit = {}, focusScale: Float = theme.focusScale, background: Color = theme.surface,
+              content: @Composable BoxScope.() -> Unit) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (focused) focusScale else 1f,
         spring(dampingRatio = 0.85f, stiffness = 500f), label = "focus")
     Box(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .drawBehind {
-            if (focused) drawRoundRect(Brush.radialGradient(listOf(theme.focus.copy(alpha = 0.18f), Color.Transparent),
+            if (focused) drawRoundRect(Brush.radialGradient(listOf(theme.focus.copy(alpha = 0.14f), Color.Transparent),
                 center = center, radius = size.maxDimension * 0.7f),
                 topLeft = Offset(-16.dp.toPx(), -16.dp.toPx()),
                 size = Size(size.width + 32.dp.toPx(), size.height + 32.dp.toPx()),
                 cornerRadius = CornerRadius(28.dp.toPx()))
         }
-        .clip(shape).background(theme.surface)
+        .clip(shape).background(if (focused && background == Color.Transparent) theme.surface else background)
         .border(if (focused) theme.focusWidth.dp else 0.dp, if (focused) theme.focus else Color.Transparent, shape)
         .onFocusChanged { focused = it.isFocused; onFocus(it.isFocused) }
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
             role = Role.Button, onClick = onClick), content = content)
 }
 
-/** Settings row: label on the left, current value on the right, like tvOS. */
+/** Settings row: label on the left, current value on the right. */
 @Composable
 private fun RowButton(label: String, value: String? = null, theme: CouchTheme, modifier: Modifier = Modifier,
-                      badge: String? = null, width: Dp = 760.dp, onClick: () -> Unit) {
+                      badge: String? = null, @DrawableRes icon: Int? = null, width: Dp = 760.dp, onClick: () -> Unit) {
     // Wide rows only lift slightly; a full tile-size zoom would crowd the list.
     Focusable(theme, RoundedCornerShape(14.dp), onClick, modifier.width(width), focusScale = 1.02f) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            if (icon != null) {
+                Image(painterResource(icon), null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(theme.text))
+                Spacer(Modifier.width(18.dp))
+            }
+            Text(label, color = theme.text, fontFamily = AppFont, fontWeight = FontWeight.Medium, fontSize = 18.sp,
                 modifier = Modifier.weight(1f))
             // Badge sits inside the surface row so the focus ring keeps its validated contrast.
-            if (badge != null) Text(badge, color = theme.onBadge, fontFamily = Poppins,
-                fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.sp,
+            if (badge != null) Text(badge, color = theme.onBadge, fontFamily = AppFont,
+                fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp,
                 modifier = Modifier.clip(RoundedCornerShape(50)).background(theme.badge)
                     .padding(horizontal = 10.dp, vertical = 3.dp))
-            if (value != null) Text(value, color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            if (value != null) Text(value, color = theme.secondary, fontFamily = AppFont, fontSize = 18.sp)
         }
     }
 }
 
 @Composable
-private fun SectionLabel(label: String, theme: CouchTheme) = Text(label, color = theme.secondary, fontFamily = Poppins,
-    fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 18.dp))
+private fun SectionLabel(label: String, theme: CouchTheme) = Text(label, color = theme.secondary, fontFamily = AppFont,
+    fontWeight = FontWeight.Medium, fontSize = 13.sp, letterSpacing = 2.sp, modifier = Modifier.padding(top = 18.dp))
 
+/** The gear panel: the TV shortcuts Google TV keeps behind its gear, plus this launcher's own options. */
 @Composable
 private fun LauncherSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (String) -> Unit,
                              speedEnabled: Boolean, setSpeed: (Boolean) -> Unit,
                              monochrome: Boolean, setMonochrome: (Boolean) -> Unit,
-                             actions: SystemActions, back: () -> Unit) {
-    val firstFocus = initialFocusModifier(themes.map { it.id })
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 48.dp), contentPadding = PaddingValues(vertical = 40.dp),
+                             config: LocalConfig, actions: SystemActions, back: () -> Unit) {
+    val firstFocus = initialFocusModifier()
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = Margin), contentPadding = PaddingValues(vertical = 40.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Heading("Settings", theme) }
+        item { SectionLabel("TV", theme) }
+        item { RowButton("Inputs", null, theme, firstFocus, icon = R.drawable.ic_input) { actions.inputs(config) } }
+        item { RowButton("Network & Internet", null, theme, icon = R.drawable.ic_wifi) { actions.wifi() } }
+        item { RowButton("Google account", null, theme, icon = R.drawable.ic_account_circle) { actions.account() } }
+        item { RowButton("All TV settings", null, theme, icon = R.drawable.ic_settings) { actions.settings() } }
+        item { SectionLabel("HOME SCREEN", theme) }
+        item { RowButton("Live download speed", if (speedEnabled) "On" else "Off", theme) { setSpeed(!speedEnabled) } }
+        item { RowButton("App artwork", if (monochrome) "Monochrome" else "Colour", theme) { setMonochrome(!monochrome) } }
         item { SectionLabel("THEME", theme) }
         items(themes, key = { it.id }) { option ->
-            RowButton(option.name, theme = theme, badge = if (option.id == theme.id) "IN USE" else null,
-                modifier = if (option == themes.first()) firstFocus else Modifier) { choose(option.id) }
+            RowButton(option.name, theme = theme, badge = if (option.id == theme.id) "IN USE" else null) { choose(option.id) }
         }
-        item { SectionLabel("HOME SCREEN", theme) }
-        item { RowButton("App artwork", if (monochrome) "Monochrome" else "Colour", theme) { setMonochrome(!monochrome) } }
-        item { RowButton("Live download speed", if (speedEnabled) "On" else "Off", theme) { setSpeed(!speedEnabled) } }
-        item { SectionLabel("TV", theme) }
-        item { RowButton("Google account", null, theme) { actions.account() } }
-        item { RowButton("TV settings", null, theme) { actions.settings() } }
         item {
-            Text("Live speed shows how fast this TV is downloading right now. It adds no traffic. Weather by Open-Meteo · CC BY 4.0",
-                color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
-                modifier = Modifier.padding(top = 12.dp))
+            Text("Live speed shows how fast this TV is downloading right now and adds no traffic. Weather by Open-Meteo · CC BY 4.0",
+                color = theme.secondary, fontFamily = AppFont, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
         }
         item { RowButton("Back", null, theme, onClick = back) }
     }

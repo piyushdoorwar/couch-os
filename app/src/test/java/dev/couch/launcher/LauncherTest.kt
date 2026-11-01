@@ -8,7 +8,7 @@ import java.io.File
 class LauncherTest {
     @Test fun allThemeAssetsMeetContrast() {
         val assets = File("src/main/assets/themes").listFiles()!!.filter { it.extension == "json" }
-        assertEquals(3, assets.size)
+        assertEquals(4, assets.size)
         assets.forEach { ThemeAssets.validate(JSONObject(it.readText())) }
     }
     @Test fun rejectsLowContrastTheme() {

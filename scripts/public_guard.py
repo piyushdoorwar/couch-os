@@ -12,6 +12,8 @@ APPROVED_BINARY = {
     'app/src/main/res/font/poppins_semibold.ttf': 'd3bf1bdaf0550e83da9ac0b1d1d9fe6db086835a83aa28578e609a394b9a0286',
     'app/src/main/res/font/poppins_extrabold.ttf': 'f2ab17c1a63a0ecc12c2461848fc8a469395e3cd2d641803e889c643d9f958e1',
     'app/src/main/res/font/poppins_black.ttf': 'd82aaaf98a9283f9a8edd24e51173337d8eaf09e25cd3d98831f8ec8461748a1',
+    # Unmodified GoogleSansFlex[ROND,opsz,slnt,wdth,wght].ttf from github.com/google/fonts ofl/googlesansflex.
+    'app/src/main/res/font/google_sans_flex.ttf': 'a9ac770798857d5e8ac593ced42b22e40a7c08cec98319f92b0eccc2783a77ba',
 }
 
 PRIVATE = re.compile(r'(^|/)(captures|build|\.gradle|\.idea)(/|$)|(^|/)local\.properties$|^config/local\.(?!example\.properties$)|\.(keystore|jks|pem|p12|apk|aab|log)$|(^|/)adb-.*\.log$|(^|/)\.env')

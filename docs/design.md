@@ -1,9 +1,15 @@
 # Home screen
 
-The launcher has a 48 dp horizontal margin, a clock in Poppins Black, a date line and a
-single horizontal row. Favourites keep the exact package order in local config;
-uninstalled or non-TV apps are skipped. All apps contains the remaining launchable
-TV packages. Empty favourites still leaves All apps focused and usable.
+The baseline mirrors the Google TV home in Apps only mode, rebuilt in our own code: a
+profile circle, a Home pill and a screensaver/quick-settings pill on the left; on the
+right, where Google TV prints its name, the time, the network (Wi-Fi name when the owner
+opts in) and live download speed. The promotional carousel is replaced by a greeting,
+the date and the weather. "Your apps" is a five-column grid of 16:9 banners: favourites
+first in the configured order, then every other TV app alphabetically. The default
+Classic theme uses Google TV's dark greys, white focus ring and light-blue pill.
+
+Empty favourites are fine: every launchable TV app still appears in the grid, and
+uninstalled favourites are skipped.
 
 Every button uses the same D-pad focus treatment: a 3 dp ring, 1.08 scale (1.02 for
 wide settings rows) and a short damped spring. A solid surface inset separates the ring from arbitrary
@@ -36,14 +42,15 @@ with values on the right. App artwork is still read from each installed app at r
 light logo on a dark plate. Nothing third-party is bundled. Button glyphs are Material
 Symbols Rounded (Apache License 2.0), stored as vector drawables in `res/drawable`.
 
-Poppins 600, 800 and 900 come from the [Google Fonts repository](https://github.com/google/fonts/tree/main/ofl/poppins).
-The font files keep their original names in their internal metadata and carry the
-SIL Open Font License in `app/src/main/assets/fonts/OFL.txt`.
-
+Google Sans Flex comes from the [Google Fonts repository](https://github.com/google/fonts/tree/main/ofl/googlesansflex)
+under the SIL Open Font License, unmodified, as a single variable file instanced at
+400–700. Its licence is in `app/src/main/assets/fonts/OFL.txt`. "Google Sans" is a
+Google trademark; Couch OS uses the font but not the name for anything of its own.
 Minimum shipped contrast ratios (across the background and surface):
 
 | Theme | Text / secondary | Focus ring |
 | --- | --- | --- |
+| Classic | 7.93:1 | 14.35:1 |
 | Broadcast | 14.45:1 | 10.42:1 |
 | Forest Crest | 7.28:1 | 6.44:1 |
 | Midnight Mint | 10.44:1 | 13.27:1 |

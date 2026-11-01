@@ -51,7 +51,7 @@ Turn debugging off and revoke debugging authorisations when finished.
 
 ## Licence
 
-Project code is MIT. Poppins is separately licensed under SIL OFL 1.1; see
+Project code is MIT. Google Sans Flex is separately licensed under SIL OFL 1.1; see
 [font notices](app/src/main/assets/fonts/OFL.txt). Button icons are [Material Symbols](https://github.com/google/material-design-icons)
 (Apache License 2.0). Weather: [Open-Meteo](https://open-meteo.com/),
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

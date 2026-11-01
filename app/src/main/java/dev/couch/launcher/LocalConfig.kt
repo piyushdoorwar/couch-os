@@ -11,6 +11,8 @@ data class LocalConfig(
     val inputsComponent: String = "",
     val inputsAction: String = "",
     val voiceHelper: Boolean = false,
+    /** One letter for the avatar circle; apps cannot read the Google account picture. */
+    val profileInitial: String? = null,
 ) {
     companion object {
         fun parse(json: JSONObject): LocalConfig {
@@ -20,7 +22,8 @@ data class LocalConfig(
             val lat = json.optDouble("latitude").takeIf { it.isFinite() && it in -90.0..90.0 }
             val lon = json.optDouble("longitude").takeIf { it.isFinite() && it in -180.0..180.0 }
             return LocalConfig(packages, if (lon != null) lat else null, if (lat != null) lon else null,
-                json.optString("inputsComponent"), json.optString("inputsAction"), json.optBoolean("voiceHelper"))
+                json.optString("inputsComponent"), json.optString("inputsAction"), json.optBoolean("voiceHelper"),
+                json.optString("profileInitial").take(1).uppercase().takeIf { it.isNotEmpty() && it[0].isLetterOrDigit() })
         }
         fun read(context: Context): LocalConfig = runCatching {
             parse(JSONObject(context.filesDir.resolve("local-config.json").readText()))

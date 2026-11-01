@@ -359,12 +359,19 @@ def configure(device, config):
     require(not component or COMPONENT.fullmatch(component), 'Invalid Inputs component.')
     require(not action or re.fullmatch(r'[A-Za-z][A-Za-z0-9_.]+', action), 'Invalid Inputs intent action.')
     data.update(inputsComponent=component, inputsAction=action)
+    initial = config.get('profile.initial', '')[:1]
+    require(not initial or initial.isalnum(), 'profile.initial must be one letter or digit.')
+    if initial:
+        data['profileInitial'] = initial.upper()
     device.identify()
     # Only the debug app supports run-as. No exported activity accepts secret configuration.
     device.shell('am', 'force-stop', APP)
     device.shell('run-as', APP, 'mkdir', '-p', 'files')
     # Fixed command only; JSON is stdin, never shell text, argv, a public asset or a temp file.
     device.run('shell', f"run-as {APP} sh -c 'umask 077; cat > files/local-config.json'", input=json.dumps(data))
+    # Android reveals the Wi-Fi name only to apps with location permission; opt-in, revoked otherwise.
+    location = 'android.permission.ACCESS_FINE_LOCATION'
+    device.shell('pm', 'grant' if config.get('wifi.show_name') == 'true' else 'revoke', APP, location)
     device.shell('am', 'start', '-n', HOME)
     print('Private launcher config provisioned. No local values were printed or built into the APK.')
 

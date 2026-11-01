@@ -308,6 +308,15 @@ class AdbProtocolTests(unittest.TestCase):
         self.assertNotIn('example.private', str(calls[-1][0]))
         self.assertIn('example.private', calls[-1][1]['input'])
 
+    def test_wifi_name_permission_is_opt_in(self):
+        for value, verb in (('true', 'grant'), ('', 'revoke')):
+            dev = FakeDevice()
+            shells = []
+            dev.run = lambda *args, **kwargs: ''
+            dev.shell = lambda *args, **kwargs: shells.append(args) or ''
+            tv.configure(dev, {'wifi.show_name': value})
+            self.assertIn(('pm', verb, tv.APP, 'android.permission.ACCESS_FINE_LOCATION'), shells)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,7 +10,7 @@ session. Do not interpret emulator results as a Toshiba compatibility claim.
 | Android lint | Pass, no errors; advisory warnings include newer dependency versions, TV landscape orientation, vector banner size and Kotlin style suggestions |
 | Python scripts and public guard | 28 tests pass, including pending journal recovery, idempotence, exact-state restore, pre-disabled preservation, critical package denial, wrong-TV rejection, HOME/fallback gates and update reporting |
 | Shell entrypoints and Git hooks | `bash -n` passes |
-| APK contents | Three theme files and Poppins OFL present; no local config file bundled |
+| APK contents | Four theme files and the Google Sans Flex OFL present; no local config file bundled |
 | Git publication guard | Staged content and reachable commit history checked before final commit |
 | TV emulator UI | 2 instrumented tests pass on Android TV API 30 x86: D-pad grid/Back, Settings/Wi-Fi/Inputs focus, theme persistence and HOME intent routing |
 | TV emulator ADB | Real dry run, disable-user, returned-package detection and exact-state restore pass; original emulator stock state restored |
