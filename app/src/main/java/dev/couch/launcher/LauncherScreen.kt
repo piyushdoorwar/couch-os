@@ -231,8 +231,17 @@ private fun ThemeSettings(themes: List<CouchTheme>, theme: CouchTheme, choose: (
         item { Heading("Make yourself at home", theme) }
         item { Text("APPEARANCE", color = theme.secondary, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp) }
         items(themes, key = { it.id }) { option ->
-            ActionTile((if (option.id == theme.id) "✓  " else "") + option.name, theme,
-                if (option == themes.first()) firstFocus else Modifier) { choose(option.id) }
+            FocusTile(theme, { choose(option.id) }, if (option == themes.first()) firstFocus else Modifier) {
+                Row(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(option.name, color = theme.text, fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    // Badge sits inside the surface tile so the focus ring keeps its validated contrast.
+                    if (option.id == theme.id) Text("IN USE", color = theme.onBadge, fontFamily = Poppins,
+                        fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(50)).background(theme.badge)
+                            .padding(horizontal = 10.dp, vertical = 3.dp))
+                }
+            }
         }
         item { ActionTile("TV settings", theme) { actions.settings() } }
         item { Text("Weather by Open-Meteo · CC BY 4.0", color = theme.secondary, fontFamily = Poppins,

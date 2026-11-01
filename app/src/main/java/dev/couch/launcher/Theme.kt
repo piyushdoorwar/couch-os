@@ -22,6 +22,9 @@ data class CouchTheme(
     val secondary: Color = Color(0xFFC9C9DC),
     val focusWidth: Float = 4f,
     val focusScale: Float = 1.045f,
+    /** Small "In use" badge: the theme's highlight with ink text, else its accent fill with normal text. */
+    val badge: Color = accent,
+    val onBadge: Color = text,
 )
 
 /** Pure colour math also used by JVM tests and asset validation. */
@@ -52,15 +55,18 @@ object ThemeAssets {
             require(Contrast.ratio(json.getString("focus"), json.getString(background)) >= 3.0)
         }
         if (json.has("highlight")) require(Contrast.ratio(json.getString("onHighlight"), json.getString("highlight")) >= 4.5)
+        else require(Contrast.ratio(json.getString("text"), json.getString("accent")) >= 4.5)
         require(json.getDouble("focusWidth") in 3.0..8.0)
         require(json.getDouble("focusScale") in 1.01..1.08)
     }
     fun parse(json: org.json.JSONObject): CouchTheme {
         validate(json)
         fun color(key: String) = Color((0xFF000000L or json.getString(key).drop(1).toLong(16)).toInt())
+        val highlight = json.has("highlight")
         return CouchTheme(json.getString("id"), json.getString("name"), color("background"), color("surface"),
             color("accent"), color("focus"), color("text"), color("secondary"),
-            json.getDouble("focusWidth").toFloat(), json.getDouble("focusScale").toFloat())
+            json.getDouble("focusWidth").toFloat(), json.getDouble("focusScale").toFloat(),
+            color(if (highlight) "highlight" else "accent"), color(if (highlight) "onHighlight" else "text"))
     }
     fun load(context: android.content.Context): List<CouchTheme> =
         context.assets.list("themes").orEmpty().filter { it.endsWith(".json") }.sorted().map {

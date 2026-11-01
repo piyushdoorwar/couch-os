@@ -16,6 +16,11 @@ class LauncherTest {
         json.put("focus", json.getString("background"))
         assertThrows(IllegalArgumentException::class.java) { ThemeAssets.validate(json) }
     }
+    @Test fun rejectsAccentBadgeWithUnreadableText() {
+        val json = JSONObject(File("src/main/assets/themes/broadcast.json").readText())
+        json.put("accent", "#3EE6D2")
+        assertThrows(IllegalArgumentException::class.java) { ThemeAssets.validate(json) }
+    }
     @Test fun weatherCacheExpiresAndDoesNotSurviveClockRollback() {
         assertTrue(WeatherCache.fresh(100L, 101L))
         assertFalse(WeatherCache.fresh(100L, 99L))

@@ -36,4 +36,8 @@ Minimum shipped contrast ratios (across the background and surface):
 | Forest Crest | 7.28:1 | 6.44:1 |
 | Midnight Mint | 10.44:1 | 13.27:1 |
 
-Forest orange with its reserved dark ink passes 5.58:1.
+The settings screen marks the active theme with a small "In use" badge inside the
+surface tile, so the focus ring never sits against the badge colour. The badge uses
+the theme's highlight with its ink (Forest Crest: 5.58:1), otherwise the accent fill
+with normal text (Midnight Mint 6.24:1, Broadcast 6.65:1). The validator rejects a
+theme whose badge text falls below 4.5:1.
