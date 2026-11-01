@@ -157,6 +157,15 @@ class Device:
     def is_our_home(self):
         return self.home() in (HOME, APP + '/' + APP + '.MainActivity')
 
+    def home_role_holder(self):
+        try:
+            output = self.shell('cmd', 'role', 'get-role-holders', '--user', '0', 'android.app.role.HOME')
+            holders = [line for line in output.splitlines() if PACKAGE.fullmatch(line)]
+            return holders[0] if len(holders) == 1 else ''
+        except SafetyError:
+            # Android 11 has no role getter shell command; inspect the OS role dump.
+            return home_role_from_dump(self.shell('dumpsys', 'role'))
+
     def enabled_state(self, package):
         require(PACKAGE.fullmatch(package), 'Invalid package name.')
         dump = self.shell('dumpsys', 'package', package)
@@ -183,6 +192,49 @@ def load_state(device, allow_missing=False):
     for package, record in state['packages'].items():
         require(PACKAGE.fullmatch(package) and record.get('before') in (0, 1), 'Unsafe/corrupt journal entry.')
     return state
+
+
+def home_role_from_dump(dump):
+    """Read only user 0's HOME role in Android 11's brace-delimited role dump.
+
+    Unknown formats/multiple holders fail closed; never infer selection from a
+    package simply appearing somewhere else in the diagnostic output.
+    """
+    def block_at(start):
+        depth = 0
+        for index in range(start, len(dump)):
+            if dump[index] == '{':
+                depth += 1
+            elif dump[index] == '}':
+                depth -= 1
+                if depth == 0:
+                    return dump[start:index + 1]
+        return ''
+    users = []
+    for match in re.finditer(r'\buser_states\s*=\s*\{', dump):
+        block = block_at(dump.index('{', match.start()))
+        if re.search(r'(?m)^\s*user_id\s*=\s*0\s*$', block):
+            users.append(block)
+    if len(users) != 1:
+        return ''
+    roles = re.findall(r'\{([^{}]*)\}', users[0])
+    homes = [role for role in roles if re.search(r'(?m)^\s*name\s*=\s*android\.app\.role\.HOME\s*$', role)]
+    if len(homes) != 1:
+        return ''
+    holders = re.findall(r'(?m)^\s*holders\s*=\s*([A-Za-z][A-Za-z0-9_.]*)\s*$', homes[0])
+    return holders[0] if len(holders) == 1 and PACKAGE.fullmatch(holders[0]) else ''
+
+
+def home_ready(device, config, packages):
+    if device.is_our_home():
+        return True
+    # Android TV can select our HOME role yet resolve the privileged stock app first.
+    # An explicit local inspection gate, exact stock match and OS role are all required.
+    stock = config.get('stock.launcher.package', '')
+    return (config.get('verification.stock.home.priority.checked') == 'true'
+            and stock in packages
+            and device.home().split('/')[0] == stock
+            and device.home_role_holder() == APP)
 
 
 def plan(device, config):
@@ -215,7 +267,7 @@ def plan(device, config):
         if rule.get('role') == 'fallback':
             require(package == fallback, 'Setup fallback does not match verified config.')
     # Require this for ALL disables: losing a dependency must not strand HOME.
-    require(APP in inventory and APP not in disabled and device.is_our_home(), 'Install Couch OS and set it as the resolved HOME before disabling any package.')
+    require(APP in inventory and APP not in disabled and home_ready(device, config, packages), 'Install Couch OS and select it as HOME before disabling any package. See the runbook if verified stock priority still wins.')
     # Fallback first, stock launcher last.
     return sorted(packages, key=lambda p: {'fallback': 0, 'stock-launcher': 2}.get(rules[p]['role'], 1))
 
@@ -223,6 +275,8 @@ def plan(device, config):
 def apply(device, config, yes):
     packages = plan(device, config)
     rules = policy()
+    if not device.is_our_home():
+        print('HOME role is Couch OS; the verified stock launcher still wins priority. This reviewed plan activates the selected HOME by disabling stock last.')
     for package in packages:
         print(f'Disable user 0: {package} — {rules[package]["reason"]}')
     if not yes:
@@ -231,7 +285,7 @@ def apply(device, config, yes):
     with mutation_lock():
         state = load_state(device, allow_missing=True)
         for package in packages:
-            require(device.is_our_home(), 'HOME changed during apply. Stop and restore.')
+            require(home_ready(device, config, packages), 'HOME selection changed during apply. Stop and restore.')
             before = device.enabled_state(package)
             record = state['packages'].get(package)
             if before in (2, 3, 4):
@@ -326,9 +380,13 @@ def install(device, config, yes):
     device.run('install', '-r', str(apk), timeout=120)
     configure(device, config)
     device.shell('cmd', 'package', 'set-home-activity', '--user', '0', HOME)
-    require(device.is_our_home(), 'Firmware did not accept Couch OS as HOME. Use Settings > default apps; do not disable stock HOME.')
-    device.shell('am', 'start', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME')
-    print('Couch OS is resolved HOME. Test the physical Home key before apply.')
+    if device.is_our_home():
+        device.shell('am', 'start', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME')
+        print('Couch OS is resolved HOME. Test the physical Home key before apply.')
+    else:
+        require(device.home_role_holder() == APP, 'Firmware did not select Couch OS as HOME. Use Settings > default apps; do not disable stock HOME.')
+        device.shell('am', 'start', '-n', HOME)
+        print('Couch OS is selected for the OS HOME role, but stock HOME still wins resolution. No package was disabled. Follow the priority investigation in the runbook before apply.')
 
 
 def check(device):
@@ -379,9 +437,15 @@ def diagnose(device):
         'voice-service': ('settings', 'get', 'secure', 'voice_interaction_service'),
         'tv-input': ('dumpsys', 'tv_input'),
         'input-picker-activities': ('cmd', 'package', 'query-activities', '--brief', '--user', '0', '-a', 'com.android.tv.action.SELECT_INPUT'),
+        'home-role': ('dumpsys', 'role'),
+        'resolved-home': ('cmd', 'package', 'resolve-activity', '--brief', '--user', '0', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME'),
         'home-activities': ('cmd', 'package', 'query-activities', '--brief', '--user', '0', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME'),
         'logcat': ('logcat', '-d', '-t', '1500'),
     }
+    system_packages = device.packages('-s')
+    commands.update({'package-' + package: ('dumpsys', 'package', package)
+                     for package, rule in policy().items()
+                     if package in system_packages and rule['action'] == 'candidate'})
     for name, command in commands.items():
         path = directory / (name + '.txt')
         try:

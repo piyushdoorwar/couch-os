@@ -30,6 +30,7 @@ class FakeDevice:
         self.states = {STOCK: 0, FALLBACK: 1, REC: 0, tv.APP: 1, 'com.google.android.backdrop': 0}
         self.mutations = []
         self.our_home = True
+        self.role_holder = tv.APP
         self.identity = 'test-device-identity'
         self.fail_on = ''
         self.personal = set()
@@ -42,6 +43,9 @@ class FakeDevice:
 
     def is_our_home(self):
         return self.our_home
+
+    def home_role_holder(self):
+        return self.role_holder
 
     def packages(self, *flags):
         if '-d' in flags:
@@ -58,6 +62,8 @@ class FakeDevice:
             raise tv.SafetyError('Simulated power failure')
         self.mutations.append((package, state))
         self.states[package] = state
+        if package == STOCK and state == 3:
+            self.our_home = True
 
 
 class TvSafetyTests(unittest.TestCase):
@@ -88,6 +94,22 @@ class TvSafetyTests(unittest.TestCase):
         del self.dev.states[tv.APP]
         with self.assertRaises(tv.SafetyError):
             tv.plan(self.dev, self.dev.config)
+
+    def test_stock_priority_path_requires_explicit_inspection_and_os_home_role(self):
+        self.dev.our_home = False
+        with self.assertRaises(tv.SafetyError):
+            tv.plan(self.dev, self.dev.config)
+        self.dev.config['verification.stock.home.priority.checked'] = 'true'
+        self.dev.role_holder = 'com.example.other'
+        with self.assertRaises(tv.SafetyError):
+            tv.plan(self.dev, self.dev.config)
+        self.dev.role_holder = tv.APP
+        with patch.object(self.dev, 'home', return_value='com.example.other/.Home'):
+            with self.assertRaises(tv.SafetyError):
+                tv.plan(self.dev, self.dev.config)
+        tv.apply(self.dev, self.dev.config, True)
+        self.assertTrue(self.dev.is_our_home())
+        self.assertEqual(3, self.dev.states[STOCK])
 
     def test_fallback_precedes_stock_and_restore_uses_prior_states(self):
         original = self.dev.states.copy()
@@ -204,6 +226,38 @@ class AdbProtocolTests(unittest.TestCase):
         # Construct without an endpoint; no real device or network is used in tests.
         self.dev = object.__new__(tv.Device)
         self.dev.config = {'tv.expected.model': 'TEST_MODEL'}
+
+    def test_android11_role_dump_is_scoped_to_user0_and_home(self):
+        dump = """ROLE MANAGER STATE:
+{
+ user_states={
+  user_id=0
+  roles=[
+   {
+    name=android.app.role.ASSISTANT
+    holders=com.example.assistant
+   }
+   {
+    name=android.app.role.HOME
+    holders=dev.couch.launcher
+   }
+  ]
+ }
+ user_states={
+  user_id=10
+  roles=[
+   {
+    name=android.app.role.HOME
+    holders=com.example.other
+   }
+  ]
+ }
+}
+"""
+        self.assertEqual(tv.APP, tv.home_role_from_dump(dump))
+        self.assertEqual('', tv.home_role_from_dump(dump.replace('user_id=0', 'user_id=1')))
+        self.assertEqual('', tv.home_role_from_dump(dump.replace('holders=dev.couch.launcher', 'holders=dev.couch.launcher\n    holders=com.example.other')))
+        self.assertEqual('', tv.home_role_from_dump('unknown format'))
 
     def test_parses_home_from_android_command(self):
         with patch.object(self.dev, 'shell', return_value='priority=0\n' + tv.HOME):

@@ -108,9 +108,22 @@ python3 -m unittest discover -s tests -v
 
 Install first performs a dry run unless `--yes` is supplied. It verifies the model
 and API, installs the generic debug APK, provisions private settings and requests
-Couch OS as HOME. A firmware refusal stops the script. If necessary use the TV's
-default-app chooser and select Couch OS; verify resolution before going further.
-Do not work around refusal by disabling the only working HOME app.
+Couch OS as HOME. A firmware refusal to select our HOME role stops the script.
+If necessary use the TV's default-app chooser and select Couch OS. If resolution
+already points to Couch OS, test the physical Home key before going further.
+
+Some Android TV builds select the requested HOME role but still resolve their
+privileged stock launcher first because of intent priority. This was observed on
+the API 30 TV emulator. In that case install explicitly opens Couch OS and reports
+the mismatch; it disables nothing. Inspect `captures/diagnostics/home-role.txt`
+and `resolved-home.txt`. Only if user 0's sole HOME role holder is
+`dev.couch.launcher` and resolution points to the exact verified stock package,
+set local `verification.stock.home.priority.checked=true`. Apply still checks
+the installed/enabled app, the OS role and that exact stock package before each
+change, disables stock last, then requires real HOME resolution to Couch OS.
+Without this explicit inspection gate the mismatch blocks apply. An unknown
+role-dump format or a different resolved HOME also blocks it. Never bypass a
+refusal to select Couch OS as the OS HOME role.
 
 The local favourites list is comma-separated package names in desired order.
 Use the inventory privately to select them. An empty list is valid; All apps is
@@ -130,7 +143,9 @@ CI debug builds may have a different signing key. If `adb install -r` reports a
 signature mismatch, stop; uninstalling would delete TV settings. Rebuild with
 the original local debug key or let the owner decide about data loss.
 
-Use the physical remote to test Home repeatedly and after standby. Confirm a
+Use the physical remote to test Couch OS repeatedly and after standby. Where
+stock intent priority still wins, open Couch OS from the app list for this
+baseline and retest the actual Home key immediately after apply. Confirm a
 large 12-hour clock, date, Celsius weather (or no temperature offline), favourites
 order, artwork, All apps, and launch/return behaviour. Exercise every item with
 D-pad only: top buttons, row, horizontally offscreen items, grid, theme selection,
@@ -166,7 +181,8 @@ the baseline; they do not replace the checks below.
 
 Review the dry-run package reasons before the second command. The script refuses
 personal apps, unknown policy entries and protected families; requires the verified
-fallback alongside stock HOME; checks resolved HOME before each change; uses
+fallback alongside stock HOME; checks working HOME or the explicitly inspected HOME-role/stock-priority case
+before each change, then verifies resolved HOME after disabling stock; uses
 `pm disable-user --user 0`; and never uninstalls anything. A previously disabled
 package stays in its existing state and is not claimed as a Couch OS change.
 
