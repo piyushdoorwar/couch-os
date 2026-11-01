@@ -29,13 +29,14 @@ class LauncherTest {
         assertNull(WeatherCache.format(Double.NaN))
         assertNull(WeatherCache.format(999.0))
     }
-    @Test fun speedFormatsMegabitsAndRejectsNonsense() {
-        assertEquals(80.0, SpeedTest.mbps(10_000_000, 1_000_000_000)!!, 0.001)
-        assertEquals("80 Mbps", SpeedTest.format(80.2))
-        assertEquals("8.4 Mbps", SpeedTest.format(8.4))
-        assertNull(SpeedTest.mbps(0, 1))
-        assertNull(SpeedTest.format(Double.NaN))
-        assertNull(SpeedTest.format(0.0))
+    @Test fun liveSpeedFormatsMegabitsAndRejectsNonsense() {
+        assertEquals(80.0, LiveSpeed.mbps(10_000_000, 1_000_000_000)!!, 0.001)
+        assertEquals("80 Mbps", LiveSpeed.format(80.2))
+        assertEquals("8.4 Mbps", LiveSpeed.format(8.4))
+        assertEquals("0.0 Mbps", LiveSpeed.format(0.0))
+        assertNull(LiveSpeed.mbps(-1, 1))
+        assertNull(LiveSpeed.mbps(10, 0))
+        assertNull(LiveSpeed.format(Double.NaN))
     }
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))

@@ -20,8 +20,8 @@ data class CouchTheme(
     val focus: Color = Color(0xFF88F9C0),
     val text: Color = Color.White,
     val secondary: Color = Color(0xFFC9C9DC),
-    val focusWidth: Float = 4f,
-    val focusScale: Float = 1.045f,
+    val focusWidth: Float = 3f,
+    val focusScale: Float = 1.08f,
     /** Small "In use" badge: the theme's highlight with ink text, else its accent fill with normal text. */
     val badge: Color = accent,
     val onBadge: Color = text,

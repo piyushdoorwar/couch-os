@@ -6,7 +6,8 @@ import android.content.Intent
 import android.graphics.drawable.Drawable
 
 /** A launch component per package. Banners/icons stay in memory and are never exported. */
-data class TvApp(val packageName: String, val label: String, val component: ComponentName, val artwork: Drawable?)
+data class TvApp(val packageName: String, val label: String, val component: ComponentName, val artwork: Drawable?,
+                 val wide: Boolean = false)
 
 class AppCatalog(private val context: Context) {
     @Suppress("DEPRECATION")
@@ -15,9 +16,10 @@ class AppCatalog(private val context: Context) {
         return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)
             .filter { it.activityInfo.packageName != context.packageName }
             .map { info ->
+                val banner = runCatching { info.activityInfo.loadBanner(pm) }.getOrNull()
                 TvApp(info.activityInfo.packageName, info.loadLabel(pm).toString(),
                     ComponentName(info.activityInfo.packageName, info.activityInfo.name),
-                    runCatching { info.activityInfo.loadBanner(pm) ?: info.loadIcon(pm) }.getOrNull())
+                    banner ?: runCatching { info.loadIcon(pm) }.getOrNull(), wide = banner != null)
             }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
     }
 }
