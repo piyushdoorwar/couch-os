@@ -1,0 +1,18 @@
+# package	action	role	reason
+com.google.android.apps.tv.launcherx	candidate	stock-launcher	Google TV Home; disable only after Couch OS is installed and HOME resolves to it
+com.google.android.tvlauncher	candidate	stock-launcher	Alternate stock Android TV Home; only if this firmware actually uses it
+com.google.android.tungsten.setupwraith	candidate	fallback	Candidate setup fallback that may re-enable Google TV Home; verify on this firmware
+com.google.android.tvrecommendations	candidate	recommendations	Candidate recommendation feed; verify voice and ambient do not depend on it
+com.google.android.backdrop	keep	ambient	Ambient mode and Google Photos must remain available
+com.google.android.apps.tv.dreamx	keep	ambient	Possible Google TV ambient implementation; never disable
+com.google.android.katniss	keep	voice	TV voice search and Assistant
+com.google.android.googlequicksearchbox	keep	voice	Possible Assistant/search provider
+com.android.vending	keep	store	Play Store and app updates
+com.google.android.gms	keep	services	Google services supporting Assistant and Photos
+com.google.android.gsf	keep	services	Google services framework
+com.android.tv.settings	keep	settings	Picture sound network remote and system settings
+com.android.tv	keep	inputs	Live TV tuner and HDMI input handling
+com.google.android.tv	keep	inputs	Possible OEM Live TV application
+com.android.bluetooth	keep	remote	Bluetooth remote and accessories
+com.android.providers.tv	keep	inputs	TV input and channel provider
+com.google.android.tv.frameworkpackagestubs	keep	system	Framework integration; no evidence it is safe to disable
