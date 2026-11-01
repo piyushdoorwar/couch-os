@@ -1,0 +1,22 @@
+# Private configuration. Only the empty example is public.
+config/local.*
+!config/local.example.properties
+local.properties
+*.keystore
+*.jks
+*.pem
+*.p12
+captures/
+adb-*.log
+*.log
+.env*
+.gradle/
+.kotlin/
+**/build/
+.idea/
+*.iml
+__pycache__/
+*.pyc
+*.apk
+*.aab
+.DS_Store

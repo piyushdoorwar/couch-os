@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Scan every reachable commit, including sensitive files deleted in later commits.
+python3 scripts/public_guard.py --history
