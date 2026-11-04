@@ -29,14 +29,14 @@ class LauncherTest {
         assertNull(WeatherCache.format(Double.NaN))
         assertNull(WeatherCache.format(999.0))
     }
-    @Test fun liveSpeedFormatsMegabitsAndRejectsNonsense() {
-        assertEquals(80.0, LiveSpeed.mbps(10_000_000, 1_000_000_000)!!, 0.001)
-        assertEquals("80 Mbps", LiveSpeed.format(80.2))
-        assertEquals("8.4 Mbps", LiveSpeed.format(8.4))
-        assertEquals("0.0 Mbps", LiveSpeed.format(0.0))
-        assertNull(LiveSpeed.mbps(-1, 1))
-        assertNull(LiveSpeed.mbps(10, 0))
-        assertNull(LiveSpeed.format(Double.NaN))
+    @Test fun wifiStrengthFillsContinuouslyAndHandlesMissingRssi() {
+        assertNull(NetworkStatus.signalStrength(null))
+        assertNull(NetworkStatus.signalStrength(-127))
+        assertNull(NetworkStatus.signalStrength(0))
+        assertEquals(0f, NetworkStatus.signalStrength(-110)!!, 0.001f)
+        assertEquals(0.5f, NetworkStatus.signalStrength(-77)!!, 0.012f)
+        assertEquals(1f, NetworkStatus.signalStrength(-55)!!, 0.001f)
+        assertEquals(1f, NetworkStatus.signalStrength(-42)!!, 0.001f)
     }
     @Test fun jumpBackInKeepsNewestInstalledAppsWithinTwoWeeks() {
         val now = 100L * 24 * 60 * 60 * 1000
@@ -68,6 +68,50 @@ class LauncherTest {
         assertEquals(list, roundTrip)
         assertTrue(MediaHistory.parse("""[{"pkg":"bad name","title":"x"},{"pkg":"a.b","title":""}]""").isEmpty())
     }
+    @Test fun homeLayoutPreservesAnExplicitEmptyFavouritesListAndPersonalSettings() {
+        val item = PlayedItem("app.one", "Evening Horizon", null, 10, null)
+        val layout = HomePreferences(favourites = emptyList(), hiddenApps = setOf("app.hidden"),
+            inputsPinned = true, ambientPinned = true, evening = true, eveningHour = 21, onlineArtwork = true)
+            .hideShow(showKey("app.one", "Hidden"))
+            .markWatched(showKey("app.one", "Finished"), 5)
+            .addPin(item)
+        assertEquals(layout, HomePreferences.parse(JSONObject(layout.toJson().toString())))
+        assertNull(HomePreferences.parse(JSONObject()).favourites)
+        assertFalse(HomePreferences.parse(JSONObject()).onlineArtwork)
+        assertFalse(layout.isEvening(20))
+        assertTrue(layout.isEvening(21))
+        assertTrue(layout.isEvening(0))
+        assertTrue(layout.isEvening(5))
+        assertFalse(layout.isEvening(6))
+        assertFalse(layout.visibleShow(showKey("app.one", "HIDDEN"), 999))
+        assertFalse(layout.visibleShow(showKey("app.one", "Finished"), 5))
+        assertTrue(layout.visibleShow(showKey("app.one", "Finished"), 6))
+    }
+    @Test fun playbackEventUsesElapsedTimeWithoutTreatingAnOldSessionAsNew() {
+        assertEquals(90_000L, MediaHistory.playbackTime(10_000, 20_000, 100_000))
+        assertNull(MediaHistory.playbackTime(0, 20_000, 100_000))
+        assertNull(MediaHistory.playbackTime(20_001, 20_000, 100_000))
+        assertNull(MediaHistory.playbackTime(1, RecentApps.WINDOW_MS + 2, RecentApps.WINDOW_MS + 100))
+    }
+
+    @Test fun episodeIdentityAndProgressAreBackwardsCompatible() {
+        val old = MediaHistory.parse("""[{"pkg":"app.one","title":"Evening Horizon","subtitle":"Episode 1","at":5}]""").single()
+        assertNull(old.progress)
+        assertNull(old.mediaId)
+        assertTrue(MediaHistory.matchesPlayback(old, old.copy(title = "evening horizon")))
+        assertFalse(MediaHistory.matchesPlayback(old, old.copy(subtitle = "Episode 2")))
+        val newer = old.copy(progress = 0.5f, mediaId = "episode:1")
+        assertEquals(listOf(newer), MediaHistory.parse(MediaHistory.serialise(listOf(newer))))
+        assertTrue(MediaHistory.matchesPlayback(newer, newer.copy(subtitle = "New display name")))
+        assertFalse(MediaHistory.matchesPlayback(newer, newer.copy(mediaId = "episode:2")))
+    }
+    @Test fun spokenLightCommandsUseTheConfiguredDeviceName() {
+        val config = LocalConfig.parse(JSONObject("""{"spokenBacklight":"Hall Lamp"}"""))
+        assertEquals("Hey, Google, Turn on the Hall Lamp", backlightCommand(config.spokenBacklight!!, on = true))
+        assertEquals("Hey, Google, Turn off the Hall Lamp", backlightCommand(config.spokenBacklight, on = false))
+        assertNull(LocalConfig.parse(JSONObject()).spokenBacklight)
+    }
+
     @Test fun configHasNoImplicitLocationOrPersonalApps() {
         assertEquals(LocalConfig(), LocalConfig.parse(JSONObject("{}")))
         val parsed = LocalConfig.parse(JSONObject("""{"favourites":["example.one","example.one","bad name"],"latitude":91,"longitude":0}"""))

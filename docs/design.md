@@ -3,35 +3,52 @@
 The baseline mirrors the Google TV home in Apps only mode, rebuilt in our own code: a
 profile circle, a Home pill and a screensaver/quick-settings pill on the left; on the
 right, where Google TV prints its name, the time, the network (Wi-Fi name when the owner
-opts in) and live download speed. The promotional carousel is replaced by a greeting,
-the date and the weather. "Your apps" is a five-column grid of 16:9 banners: favourites
-first in the configured order, then every other TV app alphabetically. The default
-Classic theme uses Google TV's dark greys, white focus ring and light-blue pill.
+opts in), followed by the optional bulb shortcut. The promotional carousel is replaced by a greeting,
+the date and the weather when there is no title to show. With automatic watch
+history enabled, Home also shows how to pin a title manually.
 
-"Continue watching" comes first when the owner opts in (`history.media_sessions=true`):
-every Android TV video app publishes a media session while playing (it is how "Ok Google,
-pause" works). `MediaListener`, granted notification-listener access over adb, reads only
-those sessions, never notifications, and records the last five distinct shows while they
-are actually playing: app, title, subtitle and the session's artwork. The history lives in
-app-private files, is excluded from backups, is never logged by title, and is hidden as
-soon as access is revoked; Settings has "Clear watch history". OK resumes through the
-app's live session when it still exists, otherwise opens the app. It only knows shows
-played after it was switched on; on the 55C350MP the shared Watch Next list was empty.
+Continue Watching shows recent titles in the carousel. Up from the first row
+moves to the card. Left and Right browse the titles, OK opens the title or its
+app, and holding OK opens pin, hide and mark-watched actions. The carousel never
+advances on its own. Hidden titles stay out until restored. A watched title can
+return when the app reports a newer playback.
 
-"Jump back in" takes the carousel slot Google TV uses for promotions. Google TV's own
-Continue watching lives inside Google services (many apps report it through Google's
-Engage SDK, off the device). The carousel first reads Android TV's shared Watch Next list
-(title, episode, poster, progress and deep link, exactly what apps exposed to the TV) and
-shows those as "Continue watching". Deep links are confined to the publishing app with URI
-grants stripped. Android normally limits a non-system home to its own Watch Next rows, so
-the launcher logs only the visible row count ("Watch Next rows visible: N") for checking on
-the TV. After shows come recently used apps: launches made from Couch OS,
-plus Android's usage history when the owner opts in with `recent.usage_access=true`.
-Up to five, newest first, from the last two weeks. It never advances by itself; Left/
-Right flips while it has focus and OK opens the app. The history never leaves the TV.
+CouchOS combines visible Android TV Watch Next entries with playback metadata
+from apps that expose it. When a session reports playback without a title,
+its app and playback time can move the app’s newest published card up.
+That signal does not identify an episode or restore a hidden or watched title.
+Home also refreshes when the TV provider updates its rows.
+The optional Android TV listings permission makes
+searchable Watch Next rows visible. Google TV Home can also read rows protected
+by a privileged permission. To enable automatic playback history, grant notification-listener
+access through CouchOS Settings if the TV exposes that page, or set
+`history.media_sessions=true` and run the configuration script when ready.
+CouchOS reads media sessions only. The five most recent titles, available
+progress and artwork are stored privately on the TV. Playback history is
+excluded from backups. Revoking access hides this history, and Settings can
+clear it.
 
-Empty favourites are fine: every launchable TV app still appears in the grid, and
-uninstalled favourites are skipped.
+Show artwork can come from a session bitmap or a poster or thumbnail URI.
+On-device images are tried first. The Download show artwork setting under
+Personalise allows CouchOS to fetch HTTPS images from the streaming app's
+artwork URLs. It is off by default. Requests go to the image host and can
+identify which artwork was requested. Images are cached in memory. Watch
+history stays on the TV, and an unavailable image leaves a title card. Pressing OK uses an app-confined Watch Next link
+when it applies to the current episode. Otherwise CouchOS looks for a matching
+live session, then opens the provider app as a fallback. The title, artwork,
+progress and playback actions available vary by streaming app and firmware.
+In the Toshiba test, Netflix and Prime Video did not provide usable titles.
+
+Hold OK on an app to pin it to favourites, move it to the front, hide it, or
+enter a show title manually. All apps includes hidden apps so they can be
+restored. Recently opened apps appear first there. Apps launched outside
+CouchOS can be included with the optional `recent.usage_access=true` setting.
+The first on-TV favourite edit takes precedence over the local config order.
+
+Personalise in Settings contains the Inputs and Google Photos Ambient shortcuts
+and the optional quiet evening layout. During the chosen evening hours (until
+6 am), Home uses Midnight Mint and initially focuses Continue Watching when
+a title is available.
 
 Every button uses the same D-pad focus treatment: a 3 dp ring, 1.08 scale (1.02 for
 wide settings rows) and a short damped spring. A solid surface inset separates the ring from arbitrary
@@ -52,10 +69,8 @@ the TV's network address; there is no analytics endpoint. Cloud backup and devic
 transfer are excluded for app-private files and preferences. The app needs network
 permissions but no location or microphone permission.
 
-Live download speed is off by default. When switched on in settings, the date line
-shows how fast the TV is downloading right now, from the kernel's device-wide byte
-counters (`TrafficStats`), sampled every two seconds while HOME is visible. It sends no
-traffic and needs no permission. Idle reads 0.0 Mbps.
+The Wi-Fi fan fills from the bottom using the current received signal
+strength. An unavailable reading leaves the fan dim.
 
 The look follows tvOS: icon-only buttons (Inputs, Wi-Fi, Google account, Settings),
 artwork-only tiles whose name appears beneath them while focused, and a settings list

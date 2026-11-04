@@ -1,6 +1,10 @@
 package dev.couch.launcher
 
+import android.database.ContentObserver
+import android.media.tv.TvContract.WatchNextPrograms
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +15,24 @@ import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : ComponentActivity() {
     private val model: LauncherModel by viewModels()
+    private val watchNextObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = model.refreshWatchNext()
+    }
+
+    private var observingWatchNext = false
+
+    override fun onStart() {
+        super.onStart()
+        observingWatchNext = runCatching {
+            contentResolver.registerContentObserver(WatchNextPrograms.CONTENT_URI, true, watchNextObserver)
+        }.isSuccess
+    }
+
+    override fun onStop() {
+        if (observingWatchNext) contentResolver.unregisterContentObserver(watchNextObserver)
+        observingWatchNext = false
+        super.onStop()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -19,7 +41,10 @@ class MainActivity : ComponentActivity() {
     }
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (intent.hasCategory(android.content.Intent.CATEGORY_HOME)) model.showHome()
+        if (intent.hasCategory(android.content.Intent.CATEGORY_HOME)) {
+            model.showHome()
+            model.refreshWatchNext()
+        }
     }
     override fun onResume() {
         super.onResume()

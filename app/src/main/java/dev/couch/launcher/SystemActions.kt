@@ -43,26 +43,27 @@ class SystemActions(private val activity: Activity) {
     fun account() = open(Intent("android.settings.USER_SETTINGS"), Intent(Settings.ACTION_SYNC_SETTINGS), Intent(Settings.ACTION_SETTINGS))
     // Starts the configured screensaver (Ambient mode with Google Photos) immediately.
     fun screensaver() = open(Intent().setClassName("com.android.systemui", "com.android.systemui.Somnambulator"))
-    /** A show from Watch Next: its own deep link if the app supplied one, otherwise the app itself. */
-    fun openShow(item: WatchNextItem, app: TvApp) {
-        val link = WatchNextSource.deepLink(item)
+    internal fun openCard(card: WatchCard) {
+        val link = card.linkedShow?.let(WatchNextSource::deepLink)
         if (link != null) try {
             activity.startActivity(link)
             return
         } catch (_: ActivityNotFoundException) {
         } catch (_: SecurityException) {
         }
-        launch(app)
-    }
-    /** A show from media history: resume through its live session if the app still has one, else open the app. */
-    fun openPlayed(item: PlayedItem, app: TvApp) {
-        val session = MediaHistory.liveSession(item)
+
+        val controller = card.livePlayback?.let { MediaHistory.activeSession(activity, it) }
+        val session = controller?.sessionActivity
         if (session != null) try {
             session.send()
+            if (MediaHistory.canResume(controller)) controller.transportControls.play()
             return
         } catch (_: android.app.PendingIntent.CanceledException) {
+        } catch (_: SecurityException) {
         }
-        launch(app)
+        launch(card.app)
     }
+
+    fun mediaAccess() = open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     fun assist() = open(Intent(Intent.ACTION_VOICE_COMMAND), Intent(Intent.ACTION_ASSIST))
 }

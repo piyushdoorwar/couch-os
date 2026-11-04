@@ -13,6 +13,8 @@ data class LocalConfig(
     val voiceHelper: Boolean = false,
     /** One letter for the avatar circle; apps cannot read the Google account picture. */
     val profileInitial: String? = null,
+    val backlight: BacklightConfig? = null,
+    val spokenBacklight: String? = null,
 ) {
     companion object {
         const val FILE = "local-config.json"
@@ -22,9 +24,12 @@ data class LocalConfig(
                 .filter { it.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+")) }.distinct()
             val lat = json.optDouble("latitude").takeIf { it.isFinite() && it in -90.0..90.0 }
             val lon = json.optDouble("longitude").takeIf { it.isFinite() && it in -180.0..180.0 }
+            val spokenBacklight = json.optString("spokenBacklight").trim().takeIf { it.isNotEmpty() }
+            require(spokenBacklight == null || spokenBacklight.matches(Regex("[\\p{L}\\p{N}][\\p{L}\\p{N} _-]{0,59}")))
             return LocalConfig(packages, if (lon != null) lat else null, if (lat != null) lon else null,
                 json.optString("inputsComponent"), json.optString("inputsAction"), json.optBoolean("voiceHelper"),
-                json.optString("profileInitial").take(1).uppercase().takeIf { it.isNotEmpty() && it[0].isLetterOrDigit() })
+                json.optString("profileInitial").take(1).uppercase().takeIf { it.isNotEmpty() && it[0].isLetterOrDigit() },
+                json.optJSONObject("backlight")?.let(BacklightConfig::parse), spokenBacklight)
         }
         fun read(context: Context): LocalConfig = runCatching {
             parse(JSONObject(context.filesDir.resolve(FILE).readText()))

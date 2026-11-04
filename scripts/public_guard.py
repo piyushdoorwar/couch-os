@@ -21,7 +21,7 @@ APPROVED_BINARY = {
 PRIVATE = re.compile(r'(^|/)(captures|build|\.gradle|\.idea)(/|$)|(^|/)local\.properties$|^config/local\.(?!example\.properties$)|\.(keystore|jks|pem|p12|apk|aab|log)$|(^|/)adb-.*\.log$|(^|/)\.env')
 IP = re.compile(r'(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])')
 MAC = re.compile(r'(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b')
-ASSIGNMENT = re.compile(r'(?im)^\s*(?:tv\.host|adb\.(?:pair\.(?:code|port)|connect\.port)|weather\.(?:latitude|longitude)|launcher\.favourites|(?:wifi|wi-fi)[._ ]?(?:ssid|name)|(?:api[._-]?key|password|serial|mac[._-]?address))[ \t]*[=:][ \t]*([^\s#\n][^\n]*)')
+ASSIGNMENT = re.compile(r'(?im)^\s*(?:tv\.host|adb\.(?:pair\.(?:code|port)|connect\.port)|weather\.(?:latitude|longitude)|launcher\.favourites|backlight\.(?:device|host|token|certificate|voice\.name)|(?:wifi|wi-fi)[._ ]?(?:ssid|name)|(?:api[._-]?key|password|serial|mac[._-]?address))[ \t]*[=:][ \t]*([^\s#\n][^\n]*)')
 SECRET = re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|AKIA[A-Z0-9]{16})\b')
 
 
@@ -61,7 +61,8 @@ def local_values():
     if not p.exists():
         return []
     # Match identifying inputs, not booleans, package policy or generic component names.
-    keys = {'tv.host', 'adb.pair.code', 'weather.latitude', 'weather.longitude', 'launcher.favourites'}
+    keys = {'tv.host', 'adb.pair.code', 'weather.latitude', 'weather.longitude', 'launcher.favourites',
+            'backlight.device', 'backlight.host', 'backlight.token', 'backlight.certificate'}
     return [v.strip() for line in p.read_text().splitlines() if '=' in line
             for k, v in [line.split('=', 1)] if k.strip() in keys and len(v.strip()) >= 4]
 

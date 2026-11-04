@@ -142,7 +142,53 @@ write (it requires `android.permission.DUMP`). A malformed or partial write is
 rejected and the previous settings stay. Personal values never enter Gradle, the APK
 or a command line, and this works for release builds. It also grants or revokes the
 opt-in permissions: location for the Wi-Fi name (`wifi.show_name`) and usage access
-for "Jump back in" (`recent.usage_access`).
+for ordering in All apps (`recent.usage_access`). It can also grant the
+media-session listener used by Continue Watching (`history.media_sessions`).
+
+CouchOS can also read searchable Watch Next entries with the optional TV
+listings grant. Apply it to the verified TV after installing CouchOS 0.2.1 or
+newer, then return to Home.
+
+```sh
+adb -s <configured-tv-endpoint> shell pm grant --user 0 dev.couch.launcher android.permission.READ_TV_LISTINGS
+```
+
+### Optional TV Smart Light shortcut
+
+To use a nearby Google Home speaker, set `backlight.voice.name` to the
+light's name in Google Home. Each press of OK alternates the spoken command
+between on and off. Hold OK to send off explicitly. The bulb is amber after
+the TV finishes speaking the on command and dim after the off command.
+The colour reflects the last spoken command. The TV's current audio output
+and volume apply.
+
+For direct control with state, the Tapo L900 bridge runs on a computer on the same home network as the TV
+and light. The computer must be awake while you use the shortcut. A Google
+Home speaker can still operate the same light through Google Home.
+
+Create the private settings once with the light's LAN address from its
+Tapo device information or your router. The setup generates the certificate
+and a separate TV token. It stores both under ignored local paths.
+
+```sh
+python3 scripts/backlight-bridge.py setup --device <light-lan-address>
+python3 -m venv config/local.backlight-venv
+config/local.backlight-venv/bin/python -m pip install 'tapo==0.12.1'
+```
+
+Start the bridge from the checkout. Enter the TP-Link account details in
+the terminal when prompted. The password is hidden and isn't saved.
+
+```sh
+config/local.backlight-venv/bin/python scripts/backlight-bridge.py serve
+```
+
+Use the normal release install and configuration steps to send the TV its
+bridge address, certificate and token. The TV does not receive the TP-Link
+account credentials. A bulb appears beside the network status once configured.
+Press OK to toggle the light. The badge reflects the reported power state,
+including changes made through Google Home. If the bridge stops, the shortcut
+reports the light as unavailable.
 
 Release builds are signed with this machine's debug key, so they upgrade the earlier
 debug install in place and keep settings. Keep `~/.android/debug.keystore`: CI builds

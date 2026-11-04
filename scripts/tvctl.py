@@ -354,7 +354,7 @@ def inventory(device):
     print(f'{len(all_packages)} packages; {len(system)} preinstalled. Unknown packages default to keep. No changes made.')
 
 
-def configure(device, config):
+def launcher_config(config):
     favourites = package_list(config.get('launcher.favourites', ''))
     lat, lon = config.get('weather.latitude', ''), config.get('weather.longitude', '')
     require(bool(lat) == bool(lon), 'Set both weather coordinates or neither.')
@@ -374,6 +374,20 @@ def configure(device, config):
     require(not initial or initial.isalnum(), 'profile.initial must be one letter or digit.')
     if initial:
         data['profileInitial'] = initial.upper()
+    backlight = {key: config.get('backlight.' + key, '') for key in ('host', 'token', 'certificate')}
+    spoken_backlight = config.get('backlight.voice.name', '')
+    if spoken_backlight:
+        require(len(spoken_backlight) <= 60 and spoken_backlight[0].isalnum() and
+                all(char.isalnum() or char in ' _-' for char in spoken_backlight), 'Set a simple device name for spoken backlight controls.')
+        data['spokenBacklight'] = spoken_backlight
+    elif any(backlight.values()):
+        require(all(backlight.values()), 'Run the local backlight bridge setup to complete the TV settings.')
+        data['backlight'] = backlight
+    return data
+
+
+def configure(device, config):
+    data = launcher_config(config)
     device.identify()
     device.shell('am', 'force-stop', APP)
     # JSON is stdin, never shell text, argv, a public asset or a temp file. The app's provider accepts

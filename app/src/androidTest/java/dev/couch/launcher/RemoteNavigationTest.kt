@@ -3,6 +3,11 @@ package dev.couch.launcher
 import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -38,7 +43,7 @@ class RemoteNavigationTest {
 
     /**
      * Top bar, left to right: profile, (Home label), Screensaver, Quick settings. Up from the grid reaches it
-     * directly, or via the "Jump back in" card, which hands focus to the nearest bar button.
+     * directly, or via the "Continue watching" card, which hands focus to the nearest bar button.
      */
     private fun openSettings() {
         repeat(3) { if (!focused("Google account") && !focused("Quick settings")) { remote.pressDPadUp(); idle() } }
@@ -62,8 +67,8 @@ class RemoteNavigationTest {
 
     @Test fun remoteThemeChoicePersistsAndHomeIntentClosesSettings() {
         openSettings()
-        // Inputs, Network, Google account, All TV settings, Live speed, App artwork, Jump back in, then themes by file name.
-        repeat(7) { remote.pressDPadDown() }
+        // Inputs, Network, Google account, All TV settings, App artwork, Continue watching, then themes by file name.
+        repeat(6) { remote.pressDPadDown() }
         idle()
         rule.onNodeWithText("Broadcast").assertIsFocused()
         remote.pressDPadCenter(); idle()
@@ -75,4 +80,40 @@ class RemoteNavigationTest {
         idle()
         button("Quick settings").assertExists()
     }
+    @Test fun shortcutsAndEveningScheduleCanBeConfiguredAndPersist() {
+        val store = HomePreferenceStore(rule.activity)
+        val before = store.load()
+        try {
+            store.save(HomePreferences())
+            rule.activityRule.scenario.recreate(); idle()
+            openSettings()
+            fun choose(label: String) {
+                rule.onNode(hasScrollAction()).performScrollToNode(hasText(label))
+                rule.onNodeWithText(label).performClick()
+                idle()
+            }
+            choose("Download show artwork")
+            choose("Pin Inputs to Home")
+            choose("Pin Google Photos Ambient to Home")
+            choose("Quiet evening layout")
+            choose("Evening starts (OK to change)")
+            rule.activityRule.scenario.recreate(); idle()
+            val layout = store.load()
+            assertEquals(true, layout.onlineArtwork)
+            assertEquals(true, layout.inputsPinned)
+            assertEquals(true, layout.ambientPinned)
+            assertEquals(true, layout.evening)
+            assertEquals(21, layout.eveningHour)
+
+            remote.pressBack(); idle()
+            val grid = rule.onNode(hasScrollAction())
+            grid.performScrollToNode(hasContentDescription("Inputs"))
+            button("Inputs").assertExists()
+            grid.performScrollToNode(hasContentDescription("Google Photos Ambient"))
+            button("Google Photos Ambient").assertExists()
+        } finally {
+            store.save(before)
+        }
+    }
+
 }

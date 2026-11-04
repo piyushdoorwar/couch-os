@@ -1,5 +1,58 @@
 # Validation record
 
+## CouchOS 0.2.5 on the Toshiba
+
+The release upgraded in place. Home showed the Wi-Fi name and the bulb in
+the former speed readout position. Both the emulator and Toshiba reported
+completion of on and off speech. The bulb records the last completed spoken
+command, while the speaker and physical light handle the resulting action.
+
+## CouchOS 0.2.4 on the Toshiba
+
+The signed release upgraded in place and opened as Home. The Toshiba's
+text-to-speech engine reported completion of a spoken backlight command.
+Google Home's recognition and the light's resulting state are not verified
+by CouchOS in spoken mode.
+
+## CouchOS 0.2.3
+
+The Android TV 11 emulator used the configured TLS certificate and token
+to reach the local bridge with a simulated L900. The bulb showed Off, sent
+an explicit On command, and then reflected an external change to Off.
+Host tests also verify that an invalid token cannot change the light.
+The real L900 was found on the LAN. Its Tapo login and power commands
+still need a hardware check.
+
+## CouchOS 0.2.2
+
+Local checks covered 15 Android unit tests, 34 host tests and seven Android TV
+11 emulator tests. Tests cover the artwork download setting, HTTPS redirects,
+image response limits and the existing playback card. Lint reported zero errors.
+The signed release was built locally. Netflix and Prime Video artwork still
+needs to be checked on the Toshiba.
+
+## CouchOS 0.2.1 on the Toshiba
+
+On 4 November 2026, the signed APK upgraded in place and CouchOS opened as
+Home. The TV confirmed the new `android.permission.READ_TV_LISTINGS` grant.
+CouchOS read five eligible Watch Next rows, up from zero before the grant.
+Stock Google TV Home has the separate privileged EPG permission. The
+searchable-listings grant does not expose rows restricted to that permission.
+
+## CouchOS 0.2.0
+
+Local checks on 4 November 2026 covered 11 Android unit tests, 34 host tests,
+and 6 instrumentation tests on an Android TV 11 emulator. Lint reported zero
+errors. The signed release upgraded in place on the emulator. A separate sample
+player published artwork, episode details and progress. Pressing Home brought
+up its title card, and pressing OK resumed the paused player. The remote tests
+also cover pinning, hiding, shortcuts and evening preferences.
+
+The physical Toshiba was outside this test run. Verify title, artwork, progress
+and resume separately for each streaming app when testing the release on it.
+
+## Earlier validation
+
 Local checks on 1 November 2026. The Toshiba TV was not reachable from this
 session. Do not interpret emulator results as a Toshiba compatibility claim.
 
